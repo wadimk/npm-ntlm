@@ -28,9 +28,12 @@ advanced-custom-nginx.conf      — шаблон для вставки в UI: Pr
 README.md                       — основная инструкция (английский): плейсхолдеры,
                                   настройка UI, PowerShell-команды для Exchange, диагностика
 README.ru.md                    — русская версия README.md
+.github/workflows/docker-publish.yml — CI: мультиплатформенная сборка и пуш
+                                  vkosin/npm-ntlm:latest в Docker Hub при пуше в main
+                                  (секреты DOCKERHUB_USERNAME / DOCKERHUB_TOKEN)
 ```
 
-Нет исходного кода приложения, тестов, CI и менеджеров пакетов — только Dockerfile, конфигурация nginx и Docker Compose.
+Нет исходного кода приложения, тестов и менеджеров пакетов — только Dockerfile, конфигурация nginx, Docker Compose и CI-workflow.
 
 ## Команды
 

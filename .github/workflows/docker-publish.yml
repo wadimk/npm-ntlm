@@ -1,0 +1,45 @@
+name: docker-publish
+
+# Мультиплатформенная сборка и публикация образа в Docker Hub.
+# Требуются секреты репозитория: DOCKERHUB_USERNAME и DOCKERHUB_TOKEN
+# (access token: hub.docker.com -> Account Settings -> Security).
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: vkosin/npm-ntlm
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+          # кэш слоёв между запусками CI
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

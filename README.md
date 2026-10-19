@@ -50,6 +50,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t registry.example.com/n
 
 Note: on Apple Silicon the amd64 build runs under QEMU emulation and takes much longer than a native one. `docker compose up -d --build` builds only the host architecture — fine for a local stack, but never push single-architecture images to a registry.
 
+### Docker Hub via GitHub Actions
+
+On every push to `main` the workflow `.github/workflows/docker-publish.yml` builds both platforms and pushes `vkosin/npm-ntlm:latest` to Docker Hub — no local build needed. One-time setup: add repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (access token: hub.docker.com → Account Settings → Security).
+
 ## Running
 
 ```bash

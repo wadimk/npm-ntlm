@@ -50,6 +50,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t registry.example.com/n
 
 Учтите: на Apple Silicon сборка amd64 идёт через QEMU-эмуляцию и занимает заметно больше времени, чем нативная. `docker compose up -d --build` собирает только архитектуру текущего хоста — для локального стека это нормально, но одноархитектурный образ в registry не пушить.
 
+### Docker Hub через GitHub Actions
+
+При каждом пуше в `main` workflow `.github/workflows/docker-publish.yml` собирает обе платформы и пушит `vkosin/npm-ntlm:latest` в Docker Hub — локальная сборка не нужна. Разовая настройка: добавить в репозиторий секреты `DOCKERHUB_USERNAME` и `DOCKERHUB_TOKEN` (access token: hub.docker.com → Account Settings → Security).
+
 ## Запуск
 
 ```bash
