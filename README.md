@@ -68,7 +68,7 @@ docker exec -it nginxproxymanager_app_1 nginx -t
 
 ## Web UI configuration
 
-1. Open `http://<host>:81`, log in with `admin@example.com` / `changeme` and change the password immediately.
+1. Open `http://<host>:81`. On the first run with an empty database, current NPM versions show a **setup wizard** — create the admin account there. The legacy `admin@example.com` / `changeme` credentials are no longer created automatically; they exist only if you set `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` (e.g. in `.env`) before the very first start.
 2. Create a Proxy Host:
    - **Domain Names:** `owa.example.com`, `autodiscover.example.com`
    - **Scheme:** HTTPS, **Forward Hostname/IP:** internal Exchange FQDN, **Port:** 443

@@ -15,6 +15,10 @@ services:
       # data/nginx/custom/http_top.conf рендерится из шаблона при старте.
       # Если пуст — используется http_top.conf как есть (правится вручную).
       - EXCHANGE_FQDN=${EXCHANGE_FQDN:-}
+      # Необязательно: первый администратор NPM. Работает только при первом
+      # запуске на пустой базе; если не заданы — UI покажет мастер настройки.
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt

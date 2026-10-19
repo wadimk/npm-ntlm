@@ -68,7 +68,7 @@ docker exec -it nginxproxymanager_app_1 nginx -t
 
 ## Настройка в веб-интерфейсе
 
-1. Откройте `http://<host>:81`, войдите под `admin@example.com` / `changeme` и сразу смените пароль.
+1. Откройте `http://<host>:81`. При первом запуске на пустой базе свежие версии NPM показывают **мастер настройки** (setup wizard) — создайте учётную запись администратора в нём. Легаси-учётные данные `admin@example.com` / `changeme` автоматически больше не создаются; они появятся, только если задать `INITIAL_ADMIN_EMAIL` и `INITIAL_ADMIN_PASSWORD` (например, в `.env`) до самого первого старта.
 2. Создайте Proxy Host:
    - **Domain Names:** `owa.example.com`, `autodiscover.example.com`
    - **Scheme:** HTTPS, **Forward Hostname/IP:** внутренний FQDN Exchange, **Port:** 443
