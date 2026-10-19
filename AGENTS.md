@@ -38,6 +38,8 @@ README.ru.md                    — русская версия README.md
 docker compose up -d --build                            # сборка образа и запуск стека
 docker exec -it nginxproxymanager_app_1 nginx -t        # проверка конфига nginx
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log  # NTLM-логи (после включения)
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t registry.example.com/npm-ntlm:latest --push .      # публикация в registry
 ```
 
 Валидировать `docker-compose.yml` локально: `docker compose config -q` (требуется установленный Docker).
@@ -62,6 +64,7 @@ docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log  
   - `autodiscover.example.com` — публичный FQDN Autodiscover.
 - При обновлении версии NPM в `Dockerfile` (ARG `NPM_IMAGE`) обязательно сверять ARG `OPENRESTY_VERSION` с версией OpenResty внутри нового образа (`docker run --rm jc21/nginx-proxy-manager:<тег> nginx -v`) — модуль собирается под конкретную версию, при рассинхроне nginx не загрузит .so.
 - `http_top.conf.template` и `advanced-custom-nginx.conf` связаны: location-блоки в Advanced-конфиге проксируют на upstream `exch_ntlm`, объявленный в шаблоне. Изменения должны оставаться согласованными.
+- Публикация образа в registry — только мультиплатформенной сборкой (`linux/amd64` + `linux/arm64`) через `docker buildx build --push`; одноархитектурный образ в registry не пушить. Учитывать, что на Apple Silicon сборка amd64 идёт через QEMU и существенно дольше нативной.
 - При изменении структуры репозитория, плейсхолдеров или процедуры настройки — синхронно обновлять разделы «Structure» и «FQDN configuration» в README.md (английский, основной) и «Структура» / «Настройка FQDN» в README.ru.md (README двуязычный, версии должны совпадать по содержанию).
 
 ## Замечания по безопасности

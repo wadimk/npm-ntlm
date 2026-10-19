@@ -40,6 +40,16 @@ Versions are set as arguments at the top of the `Dockerfile`:
 
 After changing: `docker compose build --no-cache && docker compose up -d`.
 
+## Publishing to a registry
+
+Images are always published as multi-platform builds (`linux/amd64` + `linux/arm64`), pushed straight from buildx:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t registry.example.com/npm-ntlm:latest --push .
+```
+
+Note: on Apple Silicon the amd64 build runs under QEMU emulation and takes much longer than a native one. `docker compose up -d --build` builds only the host architecture — fine for a local stack, but never push single-architecture images to a registry.
+
 ## Running
 
 ```bash

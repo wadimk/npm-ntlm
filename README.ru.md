@@ -40,6 +40,16 @@ advanced-custom-nginx.conf    — блок для вставки в UI: Proxy Ho
 
 После изменения: `docker compose build --no-cache && docker compose up -d`.
 
+## Публикация в registry
+
+Образы публикуются всегда мультиплатформенной сборкой (`linux/amd64` + `linux/arm64`), push идёт напрямую из buildx:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t registry.example.com/npm-ntlm:latest --push .
+```
+
+Учтите: на Apple Silicon сборка amd64 идёт через QEMU-эмуляцию и занимает заметно больше времени, чем нативная. `docker compose up -d --build` собирает только архитектуру текущего хоста — для локального стека это нормально, но одноархитектурный образ в registry не пушить.
+
 ## Запуск
 
 ```bash
