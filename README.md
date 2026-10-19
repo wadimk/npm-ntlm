@@ -1,5 +1,7 @@
 # NGINX Proxy Manager (NTLM) для Exchange 2019
 
+Русский | **[English version](README.en.md)**
+
 Сборка по статье: [How to Get Exchange 2019 Working Behind NGINX Proxy Manager](https://blog.cortanadesign.com.au/2025/09/10/how_to_get_exchange_2019_working_behind_nginx_proxy_manager).
 
 Образ собирается локально (см. `Dockerfile`): свежий официальный [jc21/nginx-proxy-manager](https://hub.docker.com/r/jc21/nginx-proxy-manager) плюс open-source NTLM-модуль, скомпилированный под ту же версию OpenResty, что и в базовом образе NPM. Берётся форк модуля [greetoz/nginx-ntlm-module](https://github.com/greetoz/nginx-ntlm-module) — в нём исправления очереди кэшированных соединений сверх оригинала [gabihodoroaga/nginx-ntlm-module](https://github.com/gabihodoroaga/nginx-ntlm-module). Стандартный образ NPM без NTLM-модуля с Exchange не работает (NTLM-рукопожатие обрывается — ломаются Outlook, ActiveSync, Autodiscover, EWS, MAPI, RPC).
@@ -112,7 +114,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 
 ### Логирование NTLM
 
-Раскомментируйте `log_format ntlm_log` в `http_top.conf` и добавьте в NTLM location-блоки:
+Раскомментируйте `log_format ntlm_log` в `http_top.conf` (или в шаблоне `http_top.conf.template`, если используете `EXCHANGE_FQDN`) и добавьте в NTLM location-блоки:
 
 ```
 access_log /var/log/nginx/ntlm_access.log ntlm_log;
