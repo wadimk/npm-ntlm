@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Файл предназначен для AI-агентов, работающих с этим репозиторием. Основной язык проекта — русский: комментарии, README и сообщения пишутся по-русски.
+Файл предназначен для AI-агентов, работающих с этим репозиторием. Основной язык проекта — русский: комментарии в конфигах, AGENTS.md и сообщения пишутся по-русски. Исключение — README: основной `README.md` на английском, русская версия — `README.ru.md`.
 
 ## Обзор проекта
 
@@ -25,9 +25,9 @@ data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с 
                                   автоматически включает в начало глобального блока http {}
 advanced-custom-nginx.conf      — шаблон для вставки в UI: Proxy Host -> Advanced ->
                                   Custom Nginx Configuration (порт 81)
-README.md                       — полная инструкция: плейсхолдеры, настройка UI,
-                                  PowerShell-команды для Exchange, диагностика
-README.en.md                    — английская версия README.md
+README.md                       — основная инструкция (английский): плейсхолдеры,
+                                  настройка UI, PowerShell-команды для Exchange, диагностика
+README.ru.md                    — русская версия README.md
 ```
 
 Нет исходного кода приложения, тестов, CI и менеджеров пакетов — только Dockerfile, конфигурация nginx и Docker Compose.
@@ -62,7 +62,7 @@ docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log  
   - `autodiscover.example.com` — публичный FQDN Autodiscover.
 - При обновлении версии NPM в `Dockerfile` (ARG `NPM_IMAGE`) обязательно сверять ARG `OPENRESTY_VERSION` с версией OpenResty внутри нового образа (`docker run --rm jc21/nginx-proxy-manager:<тег> nginx -v`) — модуль собирается под конкретную версию, при рассинхроне nginx не загрузит .so.
 - `http_top.conf.template` и `advanced-custom-nginx.conf` связаны: location-блоки в Advanced-конфиге проксируют на upstream `exch_ntlm`, объявленный в шаблоне. Изменения должны оставаться согласованными.
-- При изменении структуры репозитория, плейсхолдеров или процедуры настройки — синхронно обновлять разделы «Структура» и «Настройка FQDN» в README.md и соответствующие разделы английской версии README.en.md (README двуязычный, версии должны совпадать по содержанию).
+- При изменении структуры репозитория, плейсхолдеров или процедуры настройки — синхронно обновлять разделы «Structure» и «FQDN configuration» в README.md (английский, основной) и «Структура» / «Настройка FQDN» в README.ru.md (README двуязычный, версии должны совпадать по содержанию).
 
 ## Замечания по безопасности
 

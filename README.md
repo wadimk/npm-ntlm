@@ -1,71 +1,71 @@
-# NGINX Proxy Manager (NTLM) для Exchange 2019
+# NGINX Proxy Manager (NTLM) for Exchange 2019
 
-Русский | **[English version](README.en.md)**
+English | **[Русская версия](README.ru.md)**
 
-Сборка по статье: [How to Get Exchange 2019 Working Behind NGINX Proxy Manager](https://blog.cortanadesign.com.au/2025/09/10/how_to_get_exchange_2019_working_behind_nginx_proxy_manager).
+Based on the article: [How to Get Exchange 2019 Working Behind NGINX Proxy Manager](https://blog.cortanadesign.com.au/2025/09/10/how_to_get_exchange_2019_working_behind_nginx_proxy_manager).
 
-Образ собирается локально (см. `Dockerfile`): свежий официальный [jc21/nginx-proxy-manager](https://hub.docker.com/r/jc21/nginx-proxy-manager) плюс open-source NTLM-модуль, скомпилированный под ту же версию OpenResty, что и в базовом образе NPM. Берётся форк модуля [greetoz/nginx-ntlm-module](https://github.com/greetoz/nginx-ntlm-module) — в нём исправления очереди кэшированных соединений сверх оригинала [gabihodoroaga/nginx-ntlm-module](https://github.com/gabihodoroaga/nginx-ntlm-module). Стандартный образ NPM без NTLM-модуля с Exchange не работает (NTLM-рукопожатие обрывается — ломаются Outlook, ActiveSync, Autodiscover, EWS, MAPI, RPC).
+The image is built locally (see `Dockerfile`): the latest official [jc21/nginx-proxy-manager](https://hub.docker.com/r/jc21/nginx-proxy-manager) plus the open-source NTLM module compiled against the same OpenResty version as the NPM base image. The module comes from the [greetoz/nginx-ntlm-module](https://github.com/greetoz/nginx-ntlm-module) fork — it contains cached-connection queue fixes on top of the original [gabihodoroaga/nginx-ntlm-module](https://github.com/gabihodoroaga/nginx-ntlm-module). The stock NPM image does not work with Exchange without the NTLM module (the NTLM handshake breaks — Outlook, ActiveSync, Autodiscover, EWS, MAPI and RPC stop working).
 
-## Структура
+## Structure
 
 ```
-Dockerfile                    — сборка: официальный NPM + NTLM-модуль
-docker-entrypoint.sh          — рендерит http_top.conf из шаблона (envsubst) перед запуском NPM
-docker-compose.yml            — стек NPM (собирается локально, образ npm-ntlm:latest)
-.env.example                  — пример переменных окружения (скопировать в .env)
-data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с включённым NTLM
-advanced-custom-nginx.conf    — блок для вставки в UI: Proxy Host -> Advanced
+Dockerfile                    — build: official NPM + NTLM module
+docker-entrypoint.sh          — renders http_top.conf from a template (envsubst) before NPM starts
+docker-compose.yml            — NPM stack (built locally, image npm-ntlm:latest)
+.env.example                  — environment variables example (copy to .env)
+data/nginx/custom/http_top.conf.template — exch_ntlm upstream template with NTLM enabled
+advanced-custom-nginx.conf    — block to paste into the UI: Proxy Host -> Advanced
 ```
 
-## Настройка FQDN
+## FQDN configuration
 
-**Внутренний FQDN Exchange** (upstream `exch_ntlm`) задаётся переменной окружения `EXCHANGE_FQDN` — скопируйте `.env.example` в `.env` и подставьте реальное значение (compose подхватывает `.env` автоматически). При старте контейнера `docker-entrypoint.sh` рендерит `data/nginx/custom/http_top.conf` из шаблона через `envsubst`. Если переменная не задана, при первом запуске шаблон копируется как есть и FQDN можно заменить прямо в `http_top.conf` вручную.
+**Internal Exchange FQDN** (the `exch_ntlm` upstream) is set via the `EXCHANGE_FQDN` environment variable — copy `.env.example` to `.env` and fill in the real value (compose picks up `.env` automatically). At container start, `docker-entrypoint.sh` renders `data/nginx/custom/http_top.conf` from the template using `envsubst`. If the variable is not set, the template is copied as-is on first start and the FQDN can be replaced directly in `http_top.conf` manually.
 
-> Если `EXCHANGE_FQDN` задан, `http_top.conf` перезаписывается при каждом старте — правьте шаблон или переменную, а не сгенерированный файл.
+> If `EXCHANGE_FQDN` is set, `http_top.conf` is overwritten on every start — edit the template or the variable, not the generated file.
 
-**Остальные плейсхолдеры** (в `advanced-custom-nginx.conf` и при создании Proxy Host) переменными задать нельзя: этот конфиг хранится в базе NPM и вставляется через UI, поэтому заменяйте их вручную при вставке:
+**The remaining placeholders** (in `advanced-custom-nginx.conf` and when creating the Proxy Host) cannot be set via variables: that config is stored in the NPM database and pasted through the UI, so replace them manually when pasting:
 
-| Плейсхолдер | Что подставить |
+| Placeholder | Replace with |
 |---|---|
-| `exchange.internal.example.com` | внутренний FQDN сервера Exchange 2019 |
-| `owa.example.com` | публичный FQDN для OWA/ECP |
-| `autodiscover.example.com` | публичный FQDN Autodiscover (при создании Proxy Host) |
+| `exchange.internal.example.com` | internal FQDN of the Exchange 2019 server |
+| `owa.example.com` | public FQDN for OWA/ECP |
+| `autodiscover.example.com` | public Autodiscover FQDN (when creating the Proxy Host) |
 
-## Обновление до новой версии NPM
+## Updating to a new NPM version
 
-В `Dockerfile` версии заданы аргументами в шапке:
+Versions are set as arguments at the top of the `Dockerfile`:
 
-- `NPM_IMAGE` — тег официального образа NPM (сейчас `jc21/nginx-proxy-manager:2.16.0`);
-- `OPENRESTY_VERSION` — версия OpenResty из базового образа [nginx-full](https://github.com/NginxProxyManager/docker-nginx-full/blob/master/docker/docker-bake.hcl) (сейчас `1.31.1.1`); должна совпадать с той, что внутри образа NPM — проверить можно командой `docker run --rm jc21/nginx-proxy-manager:<тег> nginx -v`.
+- `NPM_IMAGE` — official NPM image tag (currently `jc21/nginx-proxy-manager:2.16.0`);
+- `OPENRESTY_VERSION` — OpenResty version from the [nginx-full](https://github.com/NginxProxyManager/docker-nginx-full/blob/master/docker/docker-bake.hcl) base image (currently `1.31.1.1`); it must match the one inside the NPM image — check with `docker run --rm jc21/nginx-proxy-manager:<tag> nginx -v`.
 
-После изменения: `docker compose build --no-cache && docker compose up -d`.
+After changing: `docker compose build --no-cache && docker compose up -d`.
 
-## Запуск
+## Running
 
 ```bash
 docker compose up -d --build
 ```
 
-Проверка конфига nginx внутри контейнера:
+Validate the nginx config inside the container:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 nginx -t
 ```
 
-## Настройка в веб-интерфейсе
+## Web UI configuration
 
-1. Откройте `http://<host>:81`, войдите под `admin@example.com` / `changeme` и сразу смените пароль.
-2. Создайте Proxy Host:
+1. Open `http://<host>:81`, log in with `admin@example.com` / `changeme` and change the password immediately.
+2. Create a Proxy Host:
    - **Domain Names:** `owa.example.com`, `autodiscover.example.com`
-   - **Scheme:** HTTPS, **Forward Hostname/IP:** внутренний FQDN Exchange, **Port:** 443
-   - **SSL:** сертификат Let's Encrypt, включить **Force SSL**
-3. На вкладке **Advanced -> Custom Nginx Configuration** вставьте содержимое `advanced-custom-nginx.conf`.
+   - **Scheme:** HTTPS, **Forward Hostname/IP:** internal Exchange FQDN, **Port:** 443
+   - **SSL:** Let's Encrypt certificate, enable **Force SSL**
+3. On the **Advanced -> Custom Nginx Configuration** tab, paste the contents of `advanced-custom-nginx.conf`.
 
-Upstream из `http_top.conf` подхватывается NPM автоматически (файл включается в начало глобального блока `http {}`).
+The upstream from `http_top.conf` is picked up by NPM automatically (the file is included at the top of the global `http {}` block).
 
-## Настройка на стороне Exchange 2019
+## Exchange 2019 configuration
 
-Выровнять URL (пример с Exchange Management Shell):
+Align the URLs (Exchange Management Shell example):
 
 ```powershell
 Set-OwaVirtualDirectory -Identity "EXCH01\owa (Default Web Site)" `
@@ -77,7 +77,7 @@ Set-EcpVirtualDirectory -Identity "EXCH01\ecp (Default Web Site)" `
   -ExternalUrl "https://owa.example.com/ecp"
 ```
 
-Если включена гибридная конфигурация с Microsoft 365 — перевести OWA/ECP на Hybrid Modern Authentication (OAuth), отключив legacy-методы:
+If you run a hybrid configuration with Microsoft 365 — switch OWA/ECP to Hybrid Modern Authentication (OAuth), disabling legacy methods:
 
 ```powershell
 Get-OwaVirtualDirectory -Server "EXCH01" | Set-OwaVirtualDirectory `
@@ -91,37 +91,37 @@ Get-EcpVirtualDirectory -Server "EXCH01" | Set-EcpVirtualDirectory `
   -WindowsAuthentication $false -OAuthAuthentication $true
 ```
 
-> Без гибрида с Entra ID HMA недоступна: OWA/ECP останутся на NTLM — браузер будет показывать системный диалог ввода логина/пароля. Это ожидаемо.
+> Without Entra ID hybrid, HMA is not available: OWA/ECP will stay on NTLM and the browser will show the system login prompt. This is expected.
 
-Проверка:
+Verify:
 
 ```powershell
 Get-OwaVirtualDirectory -Server "EXCH01" | fl server,*auth*
 Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 ```
 
-## Проверка
+## Testing
 
-- `https://owa.example.com/owa` — страница входа Microsoft 365 (при HMA), а не NTLM-диалог и не форма OWA.
-- Outlook и ActiveSync подключаются через NTLM и Autodiscover.
+- `https://owa.example.com/owa` — the Microsoft 365 sign-in page (with HMA), not an NTLM prompt and not the OWA form.
+- Outlook and ActiveSync connect via NTLM and Autodiscover.
 
-## Диагностика
+## Troubleshooting
 
-- **Циклические редиректы** — URL виртуальных каталогов не совпадают с публичным DNS или неверные reply URL в Entra ID.
-- **400/502** — используется стоковый образ NPM без NTLM-модуля.
-- **Пустая страница после входа** — на каталогах остались включены legacy-методы аутентификации.
-- **NTLM-диалог в браузере для OWA/ECP** — не включена HMA.
+- **Redirect loops** — virtual directory URLs do not match public DNS, or wrong reply URLs in Entra ID.
+- **400/502** — the stock NPM image without the NTLM module is being used.
+- **Blank page after login** — legacy authentication methods are still enabled on the directories.
+- **Browser NTLM prompt for OWA/ECP** — HMA is not enabled.
 
-### Логирование NTLM
+### NTLM logging
 
-Раскомментируйте `log_format ntlm_log` в `http_top.conf` (или в шаблоне `http_top.conf.template`, если используете `EXCHANGE_FQDN`) и добавьте в NTLM location-блоки:
+Uncomment `log_format ntlm_log` in `http_top.conf` (or in the template, if you use `EXCHANGE_FQDN`) and add to the NTLM location blocks:
 
 ```
 access_log /var/log/nginx/ntlm_access.log ntlm_log;
 error_log  /var/log/nginx/ntlm_error.log warn;
 ```
 
-Затем:
+Then:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
