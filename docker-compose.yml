@@ -1,0 +1,20 @@
+services:
+  app:
+    # Локальная сборка: свежий официальный Nginx Proxy Manager + NTLM-модуль
+    # (см. Dockerfile). Версии NPM и OpenResty задаются аргументами там же.
+    build: .
+    image: 'npm-ntlm:latest'
+    container_name: nginxproxymanager_app_1
+    restart: unless-stopped
+    ports:
+      - '80:80'    # HTTP
+      - '81:81'    # Admin UI
+      - '443:443'  # HTTPS
+    environment:
+      # FQDN сервера Exchange 2019. Если задан (например, через .env),
+      # data/nginx/custom/http_top.conf рендерится из шаблона при старте.
+      # Если пуст — используется http_top.conf как есть (правится вручную).
+      - EXCHANGE_FQDN=${EXCHANGE_FQDN:-}
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt

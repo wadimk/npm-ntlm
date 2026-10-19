@@ -1,0 +1,25 @@
+# Шаблон upstream-конфига. При старте контейнера из него рендерится
+# http_top.conf (см. docker-entrypoint.sh): если задана переменная окружения
+# EXCHANGE_FQDN, она подставляется вместо ${EXCHANGE_FQDN}; если не задана —
+# шаблон копируется как есть, и FQDN нужно заменить в http_top.conf вручную.
+#
+# http_top.conf NPM автоматически подключает в начало глобального блока http {}
+# при каждой перезагрузке конфигурации.
+
+# ---------- Exchange NTLM upstream ----------
+upstream exch_ntlm {
+    server ${EXCHANGE_FQDN}:443 max_fails=3 fail_timeout=30s;
+    ntlm;
+    ntlm_timeout 3h;
+    keepalive 64;
+}
+
+# ---------- Логирование NTLM-рукопожатий (для отладки) ----------
+# Чтобы включить: раскомментируйте, а в NTLM location-блоках добавьте
+#   access_log /var/log/nginx/ntlm_access.log ntlm_log;
+#   error_log  /var/log/nginx/ntlm_error.log warn;
+#
+# log_format ntlm_log '$remote_addr - $remote_user [$time_local] '
+#                     '"$request" $status $body_bytes_sent '
+#                     '"$http_user_agent" '
+#                     'NTLM="$http_authorization"';

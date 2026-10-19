@@ -1,0 +1,13 @@
+# Переменные окружения с реальными значениями
+.env
+
+# Сертификаты
+letsencrypt/
+
+# Рабочее состояние NPM (база, ключи, логи, сгенерированные конфиги)
+data/*
+!data/nginx/
+data/nginx/*
+!data/nginx/custom/
+data/nginx/custom/*
+!data/nginx/custom/http_top.conf.template
