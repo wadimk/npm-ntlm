@@ -17,6 +17,8 @@ ARG OPENRESTY_VERSION
 ENV OPENRESTY_VERSION=${OPENRESTY_VERSION}
 
 # Тот же набор зависимостей, что и у официальной сборки nginx-full
+# (git и dos2unix не нужны: всё скачивается tarball'ами — git clone под
+# QEMU-эмуляцией при мультиплатформенной сборке периодически падает по TLS)
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 	build-essential \
@@ -28,30 +30,26 @@ RUN apt-get update \
 	openssl unzip \
 	wget \
 	zlib1g-dev \
-	git \
 	libmaxminddb-dev \
-	dos2unix \
 	&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
 
-# Исходники OpenResty (по тегу на GitHub, как в официальном build-openresty.sh)
-# и NTLM-модуль. Берём форк greetoz: в нём исправления очереди кэшированных
+# Релизный tarball OpenResty с openresty.org (уже содержит все компоненты,
+# в отличие от GitHub-тега не требует шага mirror-tarballs) и tarball'ы модулей.
+# Берём форк greetoz: в нём исправления очереди кэшированных
 # соединений (флаг in_queue) сверх оригинала gabihodoroaga/nginx-ntlm-module.
-RUN wget "https://github.com/openresty/openresty/archive/refs/tags/v${OPENRESTY_VERSION}.tar.gz" -O "openresty-${OPENRESTY_VERSION}.tar.gz" \
+RUN wget "https://openresty.org/download/openresty-${OPENRESTY_VERSION}.tar.gz" -O "openresty-${OPENRESTY_VERSION}.tar.gz" \
 	&& tar -xzf "openresty-${OPENRESTY_VERSION}.tar.gz" \
 	&& mv "/tmp/openresty-${OPENRESTY_VERSION}" /tmp/openresty \
-	&& git clone --depth 1 https://github.com/leev/ngx_http_geoip2_module.git \
-	&& mv /tmp/ngx_http_geoip2_module /tmp/openresty/ngx_http_geoip2_module \
-	&& git clone --depth 1 https://github.com/greetoz/nginx-ntlm-module.git \
-	&& mv /tmp/nginx-ntlm-module /tmp/openresty/nginx-ntlm-module
-
-# Makefile верхнего уровня скачивает собственно бандл OpenResty
-RUN cd /tmp/openresty && make
+	&& wget -qO- "https://codeload.github.com/leev/ngx_http_geoip2_module/tar.gz/refs/heads/master" | tar -xz \
+	&& mv /tmp/ngx_http_geoip2_module-master /tmp/ngx_http_geoip2_module \
+	&& wget -qO- "https://codeload.github.com/greetoz/nginx-ntlm-module/tar.gz/refs/heads/master" | tar -xz \
+	&& mv /tmp/nginx-ntlm-module-master /tmp/nginx-ntlm-module
 
 # Аргументы configure повторяют официальную сборку nginx-full один в один
 # (плюс --add-dynamic-module для NTLM), чтобы модуль был совместим.
-RUN cd "/tmp/openresty/openresty-${OPENRESTY_VERSION}" \
+RUN cd /tmp/openresty \
 	&& ./configure \
 	--prefix=/etc/nginx \
 	--sbin-path=/usr/sbin/nginx \
@@ -92,12 +90,12 @@ RUN cd "/tmp/openresty/openresty-${OPENRESTY_VERSION}" \
 	--with-stream_ssl_module \
 	--with-stream_ssl_preread_module \
 	--with-http_v3_module \
-	--add-dynamic-module=/tmp/openresty/ngx_http_geoip2_module \
-	--add-dynamic-module=/tmp/openresty/nginx-ntlm-module
+	--add-dynamic-module=/tmp/ngx_http_geoip2_module \
+	--add-dynamic-module=/tmp/nginx-ntlm-module
 
 # Пытаемся собрать только динамические модули (быстро);
 # если не получилось — собираем всё, как делает официальная сборка.
-RUN cd "/tmp/openresty/openresty-${OPENRESTY_VERSION}" \
+RUN cd /tmp/openresty \
 	&& (make -C build/nginx-* modules || make -j"$(nproc)") \
 	&& find /tmp/openresty -name ngx_http_upstream_ntlm_module.so -exec cp {} /ngx_http_upstream_ntlm_module.so \;
 
