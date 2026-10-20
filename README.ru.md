@@ -15,6 +15,8 @@ seed-proxy-host.sh            — необязательно: создаёт Pro
 docker-compose.yml            — стек NPM (собирается локально, образ npm-ntlm:latest)
 .env.example                  — пример переменных окружения (скопировать в .env)
 data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с включённым NTLM
+                              (вшит в образ; entrypoint восстанавливает его в том при старте,
+                              если файл отсутствует)
 advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста (вшит в образ,
                               рендерится через envsubst; применяется сидером или вставляется вручную)
 ```
@@ -155,7 +157,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - **400/502** — используется стоковый образ NPM без NTLM-модуля.
 - **Пустая страница после входа** — на каталогах остались включены legacy-методы аутентификации.
 - **NTLM-диалог в браузере для OWA/ECP** — не включена HMA.
-- **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что в томе `data/nginx/custom/` есть шаблон `http_top.conf.template` и задан `EXCHANGE_FQDN`, затем перезапустите контейнер. Если переменная задана, а шаблона нет, entrypoint пишет предупреждение в лог.
+- **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что задан `EXCHANGE_FQDN`, и перезапустите контейнер (entrypoint сам восстановит шаблон из образа в том, если его там нет). Если переменная задана, а рендеринг пропущен, entrypoint пишет предупреждение в лог.
 - **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
 
 ### Логирование NTLM

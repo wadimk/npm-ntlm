@@ -28,7 +28,9 @@ docker-compose.yml              — единственный сервис `app`:
 .env.example                    — пример переменных окружения (копируется в .env)
 data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с директивой ntlm;
                                   из него при старте генерируется http_top.conf, который NPM
-                                  автоматически включает в начало глобального блока http {}
+                                  автоматически включает в начало глобального блока http {}.
+                                  Шаблон также вшит в образ (/templates/http_top.conf.template):
+                                  entrypoint восстанавливает его в том, если файла там нет
 advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста с плейсхолдерами
                                   ${EXCHANGE_FQDN} и ${OWA_FQDN}; вшивается в образ
                                   (/templates/), рендерится сидером через envsubst либо

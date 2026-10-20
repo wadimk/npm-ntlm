@@ -117,8 +117,11 @@ RUN apt-get update \
 	&& apt-get clean \
 	&& rm -rf /var/lib/apt/lists/*
 
-# Шаблон Advanced-конфига Exchange и сидер Proxy Host (через API NPM)
+# Шаблоны конфигов Exchange и сидер Proxy Host (через API NPM).
+# http_top.conf.template вшит в образ: entrypoint восстановит его в
+# /data/nginx/custom/, если в томе его нет (например, после чистой установки).
 COPY advanced-custom-nginx.conf.template /templates/advanced-custom-nginx.conf.template
+COPY data/nginx/custom/http_top.conf.template /templates/http_top.conf.template
 COPY seed-proxy-host.sh /usr/local/bin/seed-proxy-host.sh
 
 COPY docker-entrypoint.sh /docker-entrypoint.sh

@@ -5,7 +5,15 @@ set -e
 # nginx-конфиги из шаблонов, подставляя переменные окружения.
 
 TEMPLATE=/data/nginx/custom/http_top.conf.template
+TEMPLATE_IMG=/templates/http_top.conf.template
 TARGET=/data/nginx/custom/http_top.conf
+
+# Шаблон вшит в образ: если в томе /data его нет (например, том пустой
+# после чистой установки) — восстанавливаем из образа.
+if [ ! -f "$TEMPLATE" ] && [ -f "$TEMPLATE_IMG" ]; then
+	mkdir -p "$(dirname "$TEMPLATE")"
+	cp "$TEMPLATE_IMG" "$TEMPLATE"
+fi
 
 if [ -n "${EXCHANGE_FQDN:-}" ] && [ -f "$TEMPLATE" ]; then
 	# EXCHANGE_FQDN задан: рендерим шаблон. TARGET перезаписывается при каждом
