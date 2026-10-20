@@ -23,7 +23,7 @@ services:
       # API NPM (см. seed-proxy-host.sh). Требует INITIAL_ADMIN_* и OWA_FQDN.
       - NPM_SEED_PROXY_HOST=${NPM_SEED_PROXY_HOST:-false}
       - OWA_FQDN=${OWA_FQDN:-}
-      # По умолчанию autodiscover.<домен OWA_FQDN>
+      # Если пуст — Proxy Host создаётся только с OWA_FQDN (без autodiscover)
       - AUTODISCOVER_FQDN=${AUTODISCOVER_FQDN:-}
       # Необязательно: false — не выгружать IP-диапазоны AWS/Cloudflare при
       # старте (выгрузка синхронная, при её зависании UI показывает

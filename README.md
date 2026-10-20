@@ -38,9 +38,9 @@ Set in `.env` (in addition to `EXCHANGE_FQDN`):
 | `NPM_SEED_PROXY_HOST=true` | enable the seeder |
 | `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` | first admin (required for API login; applied only on an empty database) |
 | `OWA_FQDN` | public OWA/ECP FQDN |
-| `AUTODISCOVER_FQDN` | public Autodiscover FQDN (default: `autodiscover.<domain of OWA_FQDN>`) |
+| `AUTODISCOVER_FQDN` | public Autodiscover FQDN (optional: if empty, the Proxy Host is created with `OWA_FQDN` only — no autodiscover domain, no certificate for it) |
 
-On container start `seed-proxy-host.sh` waits for the NPM backend, logs in via the API and creates a Proxy Host: domains `OWA_FQDN` + `AUTODISCOVER_FQDN`, HTTPS forward to `EXCHANGE_FQDN:443`, with the rendered Advanced config (NTLM locations and logging included). It is idempotent — if a Proxy Host with `OWA_FQDN` already exists, it does nothing.
+On container start `seed-proxy-host.sh` waits for the NPM backend, logs in via the API and creates a Proxy Host: domain `OWA_FQDN` (plus `AUTODISCOVER_FQDN` if set), HTTPS forward to `EXCHANGE_FQDN:443`, with the rendered Advanced config (NTLM locations and logging included). It is idempotent — if a Proxy Host with `OWA_FQDN` already exists, it does nothing.
 
 > If the Proxy Host was created earlier **manually** (e.g. with an old hand-edited Advanced config), the seeder will skip it. Either delete the host in the UI and restart the container, or replace its Advanced config with the freshly rendered template.
 

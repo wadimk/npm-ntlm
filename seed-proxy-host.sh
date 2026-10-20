@@ -22,7 +22,9 @@ if [ -n "$MISSING" ]; then
 	exit 0
 fi
 
-AUTODISCOVER_FQDN="${AUTODISCOVER_FQDN:-autodiscover.${OWA_FQDN#*.}}"
+# AUTODISCOVER_FQDN необязателен: если пуст — Proxy Host создаётся только
+# с OWA_FQDN (домен autodiscover не добавляется, сертификат на него не нужен).
+AUTODISCOVER_FQDN="${AUTODISCOVER_FQDN:-}"
 # API backend'а доступен через nginx на 81 порту (на 3000 он не отвечает)
 API=http://127.0.0.1:81/api
 
@@ -58,7 +60,7 @@ RESPONSE=$(jq -n \
 	--arg fwd "$EXCHANGE_FQDN" \
 	--arg adv "$ADVANCED" \
 	'{
-		domain_names: [$owa, $ad],
+		domain_names: ([$owa] + (if $ad == "" then [] else [$ad] end)),
 		forward_scheme: "https",
 		forward_host: $fwd,
 		forward_port: 443,
@@ -80,7 +82,9 @@ RESPONSE=$(jq -n \
 	| jq -r '.id // empty' 2>/dev/null) || RESPONSE=""
 
 if [ -n "$RESPONSE" ]; then
-	echo "SEED: создан Proxy Host #$RESPONSE ($OWA_FQDN, $AUTODISCOVER_FQDN -> $EXCHANGE_FQDN)"
+	DOMAINS_STR="$OWA_FQDN"
+	[ -n "$AUTODISCOVER_FQDN" ] && DOMAINS_STR="$DOMAINS_STR, $AUTODISCOVER_FQDN"
+	echo "SEED: создан Proxy Host #$RESPONSE ($DOMAINS_STR -> $EXCHANGE_FQDN)"
 	echo "SEED: сертификат Let's Encrypt и Force SSL включите в UI (Hosts -> Proxy Hosts -> Edit -> SSL)"
 else
 	echo "SEED: не удалось создать Proxy Host — см. лог backend" >&2

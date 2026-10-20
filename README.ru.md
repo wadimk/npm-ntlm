@@ -38,9 +38,9 @@ advanced-custom-nginx.conf.template — шаблон Advanced-конфига х�
 | `NPM_SEED_PROXY_HOST=true` | включить сидер |
 | `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` | первый администратор (нужен для входа в API; действует только на пустую базу) |
 | `OWA_FQDN` | публичный FQDN OWA/ECP |
-| `AUTODISCOVER_FQDN` | публичный FQDN Autodiscover (по умолчанию `autodiscover.<домен OWA_FQDN>`) |
+| `AUTODISCOVER_FQDN` | публичный FQDN Autodiscover (необязательно: если пуст — Proxy Host создаётся только с `OWA_FQDN`, без домена autodiscover и сертификата на него) |
 
-При старте контейнера `seed-proxy-host.sh` ждёт backend NPM, авторизуется в API и создаёт Proxy Host: домены `OWA_FQDN` + `AUTODISCOVER_FQDN`, HTTPS-проксирование на `EXCHANGE_FQDN:443`, с отрендеренным Advanced-конфигом (NTLM-локации и логирование уже внутри). Сидер идемпотентен — если Proxy Host с `OWA_FQDN` уже существует, он ничего не делает.
+При старте контейнера `seed-proxy-host.sh` ждёт backend NPM, авторизуется в API и создаёт Proxy Host: домен `OWA_FQDN` (плюс `AUTODISCOVER_FQDN`, если задан), HTTPS-проксирование на `EXCHANGE_FQDN:443`, с отрендеренным Advanced-конфигом (NTLM-локации и логирование уже внутри). Сидер идемпотентен — если Proxy Host с `OWA_FQDN` уже существует, он ничего не делает.
 
 > Если Proxy Host был создан раньше **вручную** (например, со старым Advanced-конфигом, правленным руками), сидер его пропустит. Либо удалите хост в UI и перезапустите контейнер, либо вручную замените его Advanced-конфиг на свежеотрендеренный шаблон.
 
