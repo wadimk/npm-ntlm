@@ -156,6 +156,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - **Blank page after login** — legacy authentication methods are still enabled on the directories.
 - **Browser NTLM prompt for OWA/ECP** — HMA is not enabled.
 - **`host not found in upstream "exch_ntlm"` when saving a Proxy Host** — `/data/nginx/custom/http_top.conf` is missing or not rendered: check that `http_top.conf.template` exists in the `data/nginx/custom/` volume and that `EXCHANGE_FQDN` is set, then restart the container. The entrypoint logs a warning when the variable is set but the template is missing.
+- **UI stuck on "The API is not healthy" after a clean start** — first boot migrations take a minute or two; if it persists, check the container log: when the last lines are `Fetching IP Ranges from online services...`, outbound HTTPS to amazonaws.com/cloudflare.com is hanging (firewall) and the backend does not start listening. Disable the fetch with `IP_RANGES_FETCH_ENABLED=false` (it only feeds Access Lists with AWS/Cloudflare ranges — useless for Exchange).
 
 ### NTLM logging
 

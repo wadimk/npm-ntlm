@@ -156,6 +156,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - **Пустая страница после входа** — на каталогах остались включены legacy-методы аутентификации.
 - **NTLM-диалог в браузере для OWA/ECP** — не включена HMA.
 - **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что в томе `data/nginx/custom/` есть шаблон `http_top.conf.template` и задан `EXCHANGE_FQDN`, затем перезапустите контейнер. Если переменная задана, а шаблона нет, entrypoint пишет предупреждение в лог.
+- **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
 
 ### Логирование NTLM
 

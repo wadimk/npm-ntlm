@@ -25,6 +25,10 @@ services:
       - OWA_FQDN=${OWA_FQDN:-}
       # По умолчанию autodiscover.<домен OWA_FQDN>
       - AUTODISCOVER_FQDN=${AUTODISCOVER_FQDN:-}
+      # Необязательно: false — не выгружать IP-диапазоны AWS/Cloudflare при
+      # старте (выгрузка синхронная, при её зависании UI показывает
+      # "The API is not healthy"). Для Exchange не нужна.
+      - IP_RANGES_FETCH_ENABLED=${IP_RANGES_FETCH_ENABLED:-}
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt
