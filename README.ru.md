@@ -131,7 +131,7 @@ Get-OwaVirtualDirectory -Server "EXCH01" | Set-OwaVirtualDirectory `
 
 Get-EcpVirtualDirectory -Server "EXCH01" | Set-EcpVirtualDirectory `
   -AdfsAuthentication $false -BasicAuthentication $false `
-  -FormsAuthentication $false -DigestAuthentication $false `
+  -FormsAuthentication $false -DigestAuthenticaGhjtion $false `
   -WindowsAuthentication $false -OAuthAuthentication $true
 ```
 

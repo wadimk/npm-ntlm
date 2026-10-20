@@ -34,10 +34,24 @@ proxy_pass_header Authorization;
 
 proxy_ssl_server_name on;
 
-# ---------- Health probe ----------
+# ---------- Корень и служебное ----------
+
+# Редирект с корня сразу на OWA. На autodiscover-хосте безвреден:
+# клиенты Autodiscover ходят на /autodiscover/*, а не на /.
 location = / {
+    return 302 /owa;
+}
+
+# Health probe для мониторинга: GET /healthz -> 200 ok
+location = /healthz {
     return 200 "ok";
     add_header Content-Type text/plain;
+}
+
+# Remote PowerShell снаружи не нужен — закрываем (best practice).
+# Если Remote PS через этот прокси всё же требуется — удалите блок.
+location /powershell {
+    return 403;
 }
 
 # ---------- NTLM-backed services ----------
@@ -146,6 +160,9 @@ location /owa/ {
   proxy_pass https://${EXCHANGE_FQDN};
 }
 
+# NB: ECP — это админка Exchange. Если она не нужна снаружи, лучше
+# ограничить доступ по IP: добавьте в начало блока, например,
+#   allow 203.0.113.0/24; deny all;
 location /ecp/ {
   proxy_set_header Host ${OWA_FQDN};
   proxy_set_header Authorization "";
