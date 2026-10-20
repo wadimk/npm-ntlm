@@ -60,6 +60,7 @@ location /powershell {
 location ~* ^/(autodiscover|Autodiscover|AutoDiscover)/ {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
@@ -73,6 +74,7 @@ location ~* ^/(autodiscover|Autodiscover|AutoDiscover)/ {
 location /ews/ {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
@@ -86,6 +88,7 @@ location /ews/ {
 location = /ews/mrsproxy.svc {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
@@ -99,6 +102,7 @@ location = /ews/mrsproxy.svc {
 location /mapi/ {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Proxy-Support "Session-Based-Authentication";
   proxy_set_header Authorization $http_authorization;
 
@@ -113,6 +117,7 @@ location /mapi/ {
 location /rpc {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
@@ -126,6 +131,7 @@ location /rpc {
 location /Microsoft-Server-ActiveSync {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
@@ -139,6 +145,7 @@ location /Microsoft-Server-ActiveSync {
 location /oab {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
+  proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
