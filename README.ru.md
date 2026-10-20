@@ -164,7 +164,7 @@ $intfqdn = "exchange.internal.example.com"      # внутренний FQDN Exch
 Set-ActiveSyncVirtualDirectory -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" `
   -ExternalUrl "https://$fqdn/Microsoft-Server-ActiveSync" -InternalUrl "https://$intfqdn/Microsoft-Server-ActiveSync"
 
-Set-EwsVirtualDirectory -Identity "$server\EWS (Default Web Site)" `
+Set-WebServicesVirtualDirectory -Identity "$server\EWS (Default Web Site)" `
   -ExternalUrl "https://$fqdn/EWS/exchange.asmx" -InternalUrl "https://$intfqdn/EWS/exchange.asmx"
 
 Set-OabVirtualDirectory -Identity "$server\OAB (Default Web Site)" `
