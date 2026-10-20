@@ -11,10 +11,12 @@
 ```
 Dockerfile                    — сборка: официальный NPM + NTLM-модуль
 docker-entrypoint.sh          — рендерит http_top.conf из шаблона (envsubst) перед запуском NPM
+seed-proxy-host.sh            — необязательно: создаёт Proxy Host для Exchange через API NPM при первом старте
 docker-compose.yml            — стек NPM (собирается локально, образ npm-ntlm:latest)
 .env.example                  — пример переменных окружения (скопировать в .env)
 data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с включённым NTLM
-advanced-custom-nginx.conf    — блок для вставки в UI: Proxy Host -> Advanced
+advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста (вшит в образ,
+                              рендерится через envsubst; применяется сидером или вставляется вручную)
 ```
 
 ## Настройка FQDN
@@ -23,13 +25,33 @@ advanced-custom-nginx.conf    — блок для вставки в UI: Proxy Ho
 
 > Если `EXCHANGE_FQDN` задан, `http_top.conf` перезаписывается при каждом старте — правьте шаблон или переменную, а не сгенерированный файл.
 
-**Остальные плейсхолдеры** (в `advanced-custom-nginx.conf` и при создании Proxy Host) переменными задать нельзя: этот конфиг хранится в базе NPM и вставляется через UI, поэтому заменяйте их вручную при вставке:
+**Публичные FQDN и Advanced-конфиг хоста** находятся в `advanced-custom-nginx.conf.template`, где используются два плейсхолдера: `${EXCHANGE_FQDN}` (внутренний FQDN Exchange) и `${OWA_FQDN}` (публичный FQDN OWA/ECP). Применить шаблон можно двумя способами:
 
-| Плейсхолдер | Что подставить |
+### Автоматическое создание Proxy Host (рекомендуется)
+
+Задайте в `.env` (в дополнение к `EXCHANGE_FQDN`):
+
+| Переменная | Назначение |
 |---|---|
-| `exchange.internal.example.com` | внутренний FQDN сервера Exchange 2019 |
-| `owa.example.com` | публичный FQDN для OWA/ECP |
-| `autodiscover.example.com` | публичный FQDN Autodiscover (при создании Proxy Host) |
+| `NPM_SEED_PROXY_HOST=true` | включить сидер |
+| `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` | первый администратор (нужен для входа в API; действует только на пустую базу) |
+| `OWA_FQDN` | публичный FQDN OWA/ECP |
+| `AUTODISCOVER_FQDN` | публичный FQDN Autodiscover (по умолчанию `autodiscover.<домен OWA_FQDN>`) |
+
+При старте контейнера `seed-proxy-host.sh` ждёт backend NPM, авторизуется в API и создаёт Proxy Host: домены `OWA_FQDN` + `AUTODISCOVER_FQDN`, HTTPS-проксирование на `EXCHANGE_FQDN:443`, с отрендеренным Advanced-конфигом (NTLM-локации и логирование уже внутри). Сидер идемпотентен — если Proxy Host с `OWA_FQDN` уже существует, он ничего не делает.
+
+> Если Proxy Host был создан раньше **вручную** (например, со старым Advanced-конфигом, правленным руками), сидер его пропустит. Либо удалите хост в UI и перезапустите контейнер, либо вручную замените его Advanced-конфиг на свежеотрендеренный шаблон.
+
+Сертификат Let's Encrypt и **Force SSL** по-прежнему включаются вручную в UI (Hosts → Proxy Hosts → Edit → SSL) — после того как DNS обоих FQDN указывает на хост NPM.
+
+### Ручная вставка (запасной путь)
+
+Отрендерьте шаблон и вставьте результат в Proxy Host → Advanced → Custom Nginx Configuration:
+
+```bash
+export EXCHANGE_FQDN=exchange.internal.example.com OWA_FQDN=owa.example.com
+envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
+```
 
 ## Обновление до новой версии NPM
 
@@ -69,11 +91,11 @@ docker exec -it nginxproxymanager_app_1 nginx -t
 ## Настройка в веб-интерфейсе
 
 1. Откройте `http://<host>:81`. При первом запуске на пустой базе свежие версии NPM показывают **мастер настройки** (setup wizard) — создайте учётную запись администратора в нём. Легаси-учётные данные `admin@example.com` / `changeme` автоматически больше не создаются; они появятся, только если задать `INITIAL_ADMIN_EMAIL` и `INITIAL_ADMIN_PASSWORD` (например, в `.env`) до самого первого старта.
-2. Создайте Proxy Host:
+2. Создайте Proxy Host (при `NPM_SEED_PROXY_HOST=true` создаётся автоматически — см. выше):
    - **Domain Names:** `owa.example.com`, `autodiscover.example.com`
    - **Scheme:** HTTPS, **Forward Hostname/IP:** внутренний FQDN Exchange, **Port:** 443
-   - **SSL:** сертификат Let's Encrypt, включить **Force SSL**
-3. На вкладке **Advanced -> Custom Nginx Configuration** вставьте содержимое `advanced-custom-nginx.conf`.
+3. На вкладке **Advanced -> Custom Nginx Configuration** вставьте отрендеренный `advanced-custom-nginx.conf.template` (сидер делает это автоматически).
+4. Вкладка **SSL**: запросите сертификат Let's Encrypt и включите **Force SSL** — всегда вручную; оба FQDN уже должны резолвиться на хост NPM.
 
 Upstream из `http_top.conf` подхватывается NPM автоматически (файл включается в начало глобального блока `http {}`).
 
@@ -129,7 +151,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 
 ### Логирование NTLM
 
-Логирование NTLM-рукопожатий включено из коробки: `log_format ntlm_log` объявлен в шаблоне upstream'а, а каждый NTLM location-блок в `advanced-custom-nginx.conf` пишет в `/var/log/nginx/ntlm_access.log` (ошибки — в `/var/log/nginx/ntlm_error.log`). Смотреть рукопожатия:
+Логирование NTLM-рукопожатий включено из коробки: `log_format ntlm_log` объявлен в шаблоне upstream'а, а каждый NTLM location-блок в `advanced-custom-nginx.conf.template` пишет в `/var/log/nginx/ntlm_access.log` (ошибки — в `/var/log/nginx/ntlm_error.log`). Смотреть рукопожатия:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log

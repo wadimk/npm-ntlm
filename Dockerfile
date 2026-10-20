@@ -116,6 +116,11 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends gettext-base \
 	&& apt-get clean \
 	&& rm -rf /var/lib/apt/lists/*
+
+# Шаблон Advanced-конфига Exchange и сидер Proxy Host (через API NPM)
+COPY advanced-custom-nginx.conf.template /templates/advanced-custom-nginx.conf.template
+COPY seed-proxy-host.sh /usr/local/bin/seed-proxy-host.sh
+
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh /usr/local/bin/seed-proxy-host.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]

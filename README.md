@@ -11,10 +11,12 @@ The image is built locally (see `Dockerfile`): the latest official [jc21/nginx-p
 ```
 Dockerfile                    — build: official NPM + NTLM module
 docker-entrypoint.sh          — renders http_top.conf from a template (envsubst) before NPM starts
+seed-proxy-host.sh            — optional: creates the Exchange Proxy Host via the NPM API on first start
 docker-compose.yml            — NPM stack (built locally, image npm-ntlm:latest)
 .env.example                  — environment variables example (copy to .env)
 data/nginx/custom/http_top.conf.template — exch_ntlm upstream template with NTLM enabled
-advanced-custom-nginx.conf    — block to paste into the UI: Proxy Host -> Advanced
+advanced-custom-nginx.conf.template — per-host Advanced config template (baked into the image,
+                              rendered with envsubst; applied by the seeder or pasted manually)
 ```
 
 ## FQDN configuration
@@ -23,13 +25,33 @@ advanced-custom-nginx.conf    — block to paste into the UI: Proxy Host -> Adva
 
 > If `EXCHANGE_FQDN` is set, `http_top.conf` is overwritten on every start — edit the template or the variable, not the generated file.
 
-**The remaining placeholders** (in `advanced-custom-nginx.conf` and when creating the Proxy Host) cannot be set via variables: that config is stored in the NPM database and pasted through the UI, so replace them manually when pasting:
+**Public FQDNs and the per-host Advanced config** live in `advanced-custom-nginx.conf.template`, which uses two placeholders: `${EXCHANGE_FQDN}` (internal Exchange FQDN) and `${OWA_FQDN}` (public OWA/ECP FQDN). There are two ways to apply it:
 
-| Placeholder | Replace with |
+### Automatic Proxy Host creation (recommended)
+
+Set in `.env` (in addition to `EXCHANGE_FQDN`):
+
+| Variable | Purpose |
 |---|---|
-| `exchange.internal.example.com` | internal FQDN of the Exchange 2019 server |
-| `owa.example.com` | public FQDN for OWA/ECP |
-| `autodiscover.example.com` | public Autodiscover FQDN (when creating the Proxy Host) |
+| `NPM_SEED_PROXY_HOST=true` | enable the seeder |
+| `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` | first admin (required for API login; applied only on an empty database) |
+| `OWA_FQDN` | public OWA/ECP FQDN |
+| `AUTODISCOVER_FQDN` | public Autodiscover FQDN (default: `autodiscover.<domain of OWA_FQDN>`) |
+
+On container start `seed-proxy-host.sh` waits for the NPM backend, logs in via the API and creates a Proxy Host: domains `OWA_FQDN` + `AUTODISCOVER_FQDN`, HTTPS forward to `EXCHANGE_FQDN:443`, with the rendered Advanced config (NTLM locations and logging included). It is idempotent — if a Proxy Host with `OWA_FQDN` already exists, it does nothing.
+
+> If the Proxy Host was created earlier **manually** (e.g. with an old hand-edited Advanced config), the seeder will skip it. Either delete the host in the UI and restart the container, or replace its Advanced config with the freshly rendered template.
+
+The Let's Encrypt certificate and **Force SSL** are still enabled manually in the UI (Hosts → Proxy Hosts → Edit → SSL) — after DNS for both FQDNs points at the NPM host.
+
+### Manual paste (fallback)
+
+Render the template and paste the result into Proxy Host → Advanced → Custom Nginx Configuration:
+
+```bash
+export EXCHANGE_FQDN=exchange.internal.example.com OWA_FQDN=owa.example.com
+envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
+```
 
 ## Updating to a new NPM version
 
@@ -69,11 +91,11 @@ docker exec -it nginxproxymanager_app_1 nginx -t
 ## Web UI configuration
 
 1. Open `http://<host>:81`. On the first run with an empty database, current NPM versions show a **setup wizard** — create the admin account there. The legacy `admin@example.com` / `changeme` credentials are no longer created automatically; they exist only if you set `INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` (e.g. in `.env`) before the very first start.
-2. Create a Proxy Host:
+2. Create a Proxy Host (done automatically when `NPM_SEED_PROXY_HOST=true` — see above):
    - **Domain Names:** `owa.example.com`, `autodiscover.example.com`
    - **Scheme:** HTTPS, **Forward Hostname/IP:** internal Exchange FQDN, **Port:** 443
-   - **SSL:** Let's Encrypt certificate, enable **Force SSL**
-3. On the **Advanced -> Custom Nginx Configuration** tab, paste the contents of `advanced-custom-nginx.conf`.
+3. On the **Advanced -> Custom Nginx Configuration** tab, paste the rendered `advanced-custom-nginx.conf.template` (also done automatically by the seeder).
+4. **SSL** tab: request a Let's Encrypt certificate and enable **Force SSL** — always manual; both FQDNs must already resolve to the NPM host.
 
 The upstream from `http_top.conf` is picked up by NPM automatically (the file is included at the top of the global `http {}` block).
 
@@ -129,7 +151,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 
 ### NTLM logging
 
-NTLM handshake logging is enabled out of the box: `log_format ntlm_log` is defined in the upstream template, and every NTLM location block in `advanced-custom-nginx.conf` writes to `/var/log/nginx/ntlm_access.log` (errors go to `/var/log/nginx/ntlm_error.log`). Watch the handshakes:
+NTLM handshake logging is enabled out of the box: `log_format ntlm_log` is defined in the upstream template, and every NTLM location block in `advanced-custom-nginx.conf.template` writes to `/var/log/nginx/ntlm_access.log` (errors go to `/var/log/nginx/ntlm_error.log`). Watch the handshakes:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log

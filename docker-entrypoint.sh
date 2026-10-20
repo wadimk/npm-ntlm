@@ -22,4 +22,8 @@ elif [ ! -f "$TARGET" ] && [ -f "$TEMPLATE" ]; then
 	cp "$TEMPLATE" "$TARGET"
 fi
 
+# Сидирование Proxy Host для Exchange через API NPM (в фоне; само решит,
+# нужно ли что-то делать — см. seed-proxy-host.sh).
+/usr/local/bin/seed-proxy-host.sh &
+
 exec /init "$@"

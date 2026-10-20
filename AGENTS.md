@@ -15,16 +15,24 @@ Dockerfile                      — многоступенчатая сборк�
                                   под версию OpenResty базового образа NPM + копирование
                                   .so и load_module в официальный образ NPM
 docker-entrypoint.sh            — обёртка entrypoint: рендерит http_top.conf из шаблона
-                                  через envsubst (переменная EXCHANGE_FQDN), затем exec /init
+                                  через envsubst (переменная EXCHANGE_FQDN), запускает
+                                  в фоне seed-proxy-host.sh, затем exec /init
+seed-proxy-host.sh              — сидер: при NPM_SEED_PROXY_HOST=true создаёт Proxy Host
+                                  для Exchange через API NPM (http://127.0.0.1:81/api,
+                                  логин по INITIAL_ADMIN_*); идемпотентен — пропускает,
+                                  если хост с OWA_FQDN уже существует
 docker-compose.yml              — единственный сервис `app`: build ., образ npm-ntlm:latest,
                                   порты 80/81/443, тома ./data и ./letsencrypt,
-                                  environment EXCHANGE_FQDN (из .env)
+                                  environment EXCHANGE_FQDN, INITIAL_ADMIN_*,
+                                  NPM_SEED_PROXY_HOST, OWA_FQDN, AUTODISCOVER_FQDN (из .env)
 .env.example                    — пример переменных окружения (копируется в .env)
 data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с директивой ntlm;
                                   из него при старте генерируется http_top.conf, который NPM
                                   автоматически включает в начало глобального блока http {}
-advanced-custom-nginx.conf      — шаблон для вставки в UI: Proxy Host -> Advanced ->
-                                  Custom Nginx Configuration (порт 81)
+advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста с плейсхолдерами
+                                  ${EXCHANGE_FQDN} и ${OWA_FQDN}; вшивается в образ
+                                  (/templates/), рендерится сидером через envsubst либо
+                                  вручную для вставки в UI: Proxy Host -> Advanced (порт 81)
 README.md                       — основная инструкция (английский): плейсхолдеры,
                                   настройка UI, PowerShell-команды для Exchange, диагностика
 README.ru.md                    — русская версия README.md
@@ -41,6 +49,8 @@ README.ru.md                    — русская версия README.md
 docker compose up -d --build                            # сборка образа и запуск стека
 docker exec -it nginxproxymanager_app_1 nginx -t        # проверка конфига nginx
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log  # NTLM-логи (после включения)
+envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' \
+  < advanced-custom-nginx.conf.template                 # ручной рендер Advanced-конфига
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t registry.example.com/npm-ntlm:latest --push .      # публикация в registry
 ```
@@ -59,14 +69,14 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Правила внесения изменений
 
-- Комментарии в конфигах и документация — на русском (английские пометки вроде `# buffering and timeouts` уже встречаются в `advanced-custom-nginx.conf` — допустимо, но предпочтителен русский).
-- Конфиги содержат плейсхолдеры, которые пользователь заменяет вручную — не заменять их конкретными значениями:
-  - `${EXCHANGE_FQDN}` — внутренний FQDN Exchange 2019 в `data/nginx/custom/http_top.conf.template`; подставляется через переменную окружения `EXCHANGE_FQDN` (см. `.env.example`) либо вручную в сгенерированном `http_top.conf`;
-  - `exchange.internal.example.com` — тот же FQDN в `advanced-custom-nginx.conf` (там env недоступен, конфиг хранится в базе NPM);
-  - `owa.example.com` — публичный FQDN OWA/ECP;
-  - `autodiscover.example.com` — публичный FQDN Autodiscover.
+- Комментарии в конфигах и документация — на русском (английские пометки вроде `# buffering and timeouts` уже встречаются в `advanced-custom-nginx.conf.template` — допустимо, но предпочтителен русский).
+- Конфиги содержат плейсхолдеры — не заменять их конкретными значениями:
+  - `${EXCHANGE_FQDN}` — внутренний FQDN Exchange 2019; в `data/nginx/custom/http_top.conf.template` и в `advanced-custom-nginx.conf.template`. Подставляется через env `EXCHANGE_FQDN`: первый рендерит entrypoint при старте, второй — сидер (`seed-proxy-host.sh`) через envsubst либо пользователь вручную перед вставкой в UI;
+  - `${OWA_FQDN}` — публичный FQDN OWA/ECP в `advanced-custom-nginx.conf.template`; подставляется сидером из env `OWA_FQDN` либо вручную;
+  - `autodiscover.example.com` — публичный FQDN Autodiscover (только в примерах документации; реальное значение — env `AUTODISCOVER_FQDN`, по умолчанию `autodiscover.<домен OWA_FQDN>`).
+- Сидер (`seed-proxy-host.sh`) работает через API NPM на `http://127.0.0.1:81/api` (на порт 3000 backend не отвечает). Payload создания Proxy Host строго по схеме NPM 2.16: лишние поля (например, `custom_ssl_redirect`) API отвергает с "must NOT have additional properties". Сертификат LE и Force SSL сидер НЕ запрашивает — это ручной шаг в UI.
 - При обновлении версии NPM в `Dockerfile` (ARG `NPM_IMAGE`) обязательно сверять ARG `OPENRESTY_VERSION` с версией OpenResty внутри нового образа (`docker run --rm jc21/nginx-proxy-manager:<тег> nginx -v`) — модуль собирается под конкретную версию, при рассинхроне nginx не загрузит .so.
-- `http_top.conf.template` и `advanced-custom-nginx.conf` связаны: location-блоки в Advanced-конфиге проксируют на upstream `exch_ntlm`, объявленный в шаблоне. Изменения должны оставаться согласованными.
+- `http_top.conf.template` и `advanced-custom-nginx.conf.template` связаны: location-блоки в Advanced-конфиге проксируют на upstream `exch_ntlm`, объявленный в шаблоне. Изменения должны оставаться согласованными.
 - Публикация образа в registry — только мультиплатформенной сборкой (`linux/amd64` + `linux/arm64`) через `docker buildx build --push`; одноархитектурный образ в registry не пушить. Учитывать, что на Apple Silicon сборка amd64 идёт через QEMU и существенно дольше нативной.
 - При изменении структуры репозитория, плейсхолдеров или процедуры настройки — синхронно обновлять разделы «Structure» и «FQDN configuration» в README.md (английский, основной) и «Структура» / «Настройка FQDN» в README.ru.md (README двуязычный, версии должны совпадать по содержанию).
 
@@ -75,4 +85,4 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 - В свежих версиях NPM (включая 2.16) дефолтный админ `admin@example.com` / `changeme` НЕ создаётся: при первом запуске на пустой базе UI показывает setup wizard, а для автоматизации есть env `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` (действуют только на пустую таблицу пользователей). Реальный пароль не хранить в репозитории — только через `.env`.
 - В репозитории не хранить реальные FQDN, IP-адреса, сертификаты и учётные данные — только плейсхолдеры.
 - Каталог `./letsencrypt` монтируется в контейнер, но в репозиторий не входит; сертификаты туда не коммитить.
-- Для NTLM location-блоков критичны `proxy_http_version 1.1` и пустой заголовок `Connection` — удаление сломает NTLM-аутентификацию. В OWA/ECP-блоках заголовок `Authorization` намеренно обрезается (`proxy_set_header Authorization "";`) — это осознанное решение, а не ошибка.
+- Для NTLM location-блоков критичны `proxy_http_version 1.1` и пустой заголовок `Connection` — удаление сломает NTLM-аутентификацию. Они выставляются только per-location: в общем блоке Advanced-конфига их быть не должно — NPM 2.16 сам генерирует эти директивы на уровне `server {}`, а дубликат даёт `nginx: [emerg] duplicate ... directive`. В OWA/ECP-блоках заголовок `Authorization` намеренно обрезается (`proxy_set_header Authorization "";`) — это осознанное решение, а не ошибка.

@@ -19,6 +19,12 @@ services:
       # запуске на пустой базе; если не заданы — UI покажет мастер настройки.
       - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # Необязательно: автоматически создать Proxy Host для Exchange через
+      # API NPM (см. seed-proxy-host.sh). Требует INITIAL_ADMIN_* и OWA_FQDN.
+      - NPM_SEED_PROXY_HOST=${NPM_SEED_PROXY_HOST:-false}
+      - OWA_FQDN=${OWA_FQDN:-}
+      # По умолчанию autodiscover.<домен OWA_FQDN>
+      - AUTODISCOVER_FQDN=${AUTODISCOVER_FQDN:-}
     volumes:
       - ./data:/data
       - ./letsencrypt:/etc/letsencrypt

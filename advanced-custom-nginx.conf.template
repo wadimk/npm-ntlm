@@ -1,10 +1,12 @@
 # =========================================================================
-# Вставьте это в Proxy Host -> Advanced -> Custom Nginx Configuration
-# в веб-интерфейсе NGINX Proxy Manager (порт 81).
+# Шаблон Advanced-конфига Proxy Host для Exchange 2019.
 #
-# Перед вставкой замените:
-#   owa.example.com                 -> ваш публичный FQDN для OWA
-#   exchange.internal.example.com   -> внутренний FQDN сервера Exchange 2019
+# При NPM_SEED_PROXY_HOST=true entrypoint сам рендерит его и создаёт
+# Proxy Host через API NPM (см. seed-proxy-host.sh). Для ручной вставки
+# (Proxy Host -> Advanced -> Custom Nginx Configuration, порт 81)
+# замените плейсхолдеры:
+#   ${OWA_FQDN}       -> ваш публичный FQDN для OWA
+#   ${EXCHANGE_FQDN}  -> внутренний FQDN сервера Exchange 2019
 # =========================================================================
 
 keepalive_timeout 3h;
@@ -18,9 +20,9 @@ proxy_read_timeout 3h;
 proxy_send_timeout 3h;
 proxy_connect_timeout 20s;
 
-# required for NTLM and stable upstream connections
-proxy_http_version 1.1;
-proxy_set_header Connection "";
+# NB: proxy_http_version 1.1 и proxy_set_header Connection здесь не задаём —
+# NPM 2.16 уже генерирует их на уровне server {} (будет duplicate),
+# а в NTLM location-блоках ниже они выставлены явно.
 
 # standard headers
 proxy_set_header Accept-Encoding "identity";
@@ -46,7 +48,7 @@ location ~* ^/(autodiscover|Autodiscover|AutoDiscover)/ {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -59,7 +61,7 @@ location /ews/ {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -72,7 +74,7 @@ location = /ews/mrsproxy.svc {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -86,7 +88,7 @@ location /mapi/ {
   proxy_set_header Proxy-Support "Session-Based-Authentication";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -99,7 +101,7 @@ location /rpc {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -112,7 +114,7 @@ location /Microsoft-Server-ActiveSync {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -125,7 +127,7 @@ location /oab {
   proxy_set_header Connection "";
   proxy_set_header Authorization $http_authorization;
 
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
@@ -137,17 +139,17 @@ location /oab {
 # Authorization обрезается — NTLM в OWA/ECP не проходит.
 
 location /owa/ {
-  proxy_set_header Host owa.example.com;
+  proxy_set_header Host ${OWA_FQDN};
   proxy_set_header Authorization "";
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_redirect off; # preserve Location headers from Exchange
-  proxy_pass https://exchange.internal.example.com;
+  proxy_pass https://${EXCHANGE_FQDN};
 }
 
 location /ecp/ {
-  proxy_set_header Host owa.example.com;
+  proxy_set_header Host ${OWA_FQDN};
   proxy_set_header Authorization "";
-  proxy_ssl_name exchange.internal.example.com;
+  proxy_ssl_name ${EXCHANGE_FQDN};
   proxy_redirect off; # preserve Location headers from Exchange
-  proxy_pass https://exchange.internal.example.com;
+  proxy_pass https://${EXCHANGE_FQDN};
 }
