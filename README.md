@@ -52,7 +52,7 @@ If the seeder cannot run, nothing breaks — NPM starts normally, only the autom
 - `SEED: не удалось авторизоваться в API NPM ...` — the credentials do not match the real admin (typical for an existing database); the seeder retries for ~5 minutes, then gives up. NPM itself keeps working.
 - No `SEED` lines at all — `NPM_SEED_PROXY_HOST` is not `true`, the seeder never started.
 
-The Let's Encrypt certificate and **Force SSL** are still enabled manually in the UI (Hosts → Proxy Hosts → Edit → SSL) — after DNS for both FQDNs points at the NPM host.
+The Let's Encrypt certificate and **Force SSL** are still enabled manually in the UI (Hosts → Proxy Hosts → Edit → SSL) — after DNS for every FQDN in the host points at the NPM host.
 
 ### Manual paste (fallback)
 
@@ -62,6 +62,21 @@ Render the template and paste the result into Proxy Host → Advanced → Custom
 export EXCHANGE_FQDN=exchange.internal.example.com OWA_FQDN=owa.example.com
 envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 ```
+
+### What the seeded config includes
+
+- `/` redirects (302) to `/owa`; `/healthz` returns `200 ok` for monitoring;
+- **`/powershell` and `/ecp` return 403** — Remote PowerShell and the Exchange admin panel are not exposed to the internet. To open ECP (e.g. restricted to your IPs), edit the Advanced config per the comment inside the template;
+- every NTLM location logs handshakes to `/var/log/nginx/ntlm_access.log` (see "NTLM logging" below).
+
+### Seeder lifecycle (what changes on restart)
+
+The seeder is **create-only**: existence is checked by `OWA_FQDN`, and an existing Proxy Host is never modified — your UI edits (certificate, Force SSL, …) are safe across restarts.
+
+- Changing `AUTODISCOVER_FQDN` after seeding (empty → set → another value → empty) changes **nothing**; the domain list is fixed at creation time. To apply: delete the Proxy Host in the UI and `docker compose restart` — the seeder recreates it with the current values (re-attach the certificate and Force SSL afterwards).
+- Changing `EXCHANGE_FQDN` applies only **partially** on restart: the `exch_ntlm` upstream in `http_top.conf` is re-rendered on every start, but the Advanced config stored in the NPM database keeps the value baked in at seed time (the `proxy_pass` of the `/owa/` block). Recreate the host or fix the Advanced config in the UI.
+- Changing `OWA_FQDN` creates a **second** Proxy Host instead of renaming the old one — the existence check keys on it.
+- Certificates: Let's Encrypt validates **every** domain in `domain_names` over HTTP-01. If any domain (e.g. autodiscover) has no A record pointing at the NPM host, the whole request fails with "Internal Error" — an already issued certificate is not affected. Create DNS first (`dig +short autodiscover.example.com @8.8.8.8`), then request the certificate.
 
 ## Updating to a new NPM version
 
@@ -159,6 +174,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - **Browser NTLM prompt for OWA/ECP** — HMA is not enabled.
 - **`host not found in upstream "exch_ntlm"` when saving a Proxy Host** — `/data/nginx/custom/http_top.conf` is missing or not rendered: check that `EXCHANGE_FQDN` is set and restart the container (the entrypoint restores the template from the image into the volume if it is missing). If the variable is set but rendering was skipped, the entrypoint logs a warning.
 - **UI stuck on "The API is not healthy" after a clean start** — first boot migrations take a minute or two; if it persists, check the container log: when the last lines are `Fetching IP Ranges from online services...`, outbound HTTPS to amazonaws.com/cloudflare.com is hanging (firewall) and the backend does not start listening. Disable the fetch with `IP_RANGES_FETCH_ENABLED=false` (it only feeds Access Lists with AWS/Cloudflare ranges — useless for Exchange).
+- **Connection refused on all ports (even the UI)** — `EXCHANGE_FQDN` does not resolve from inside the container: nginx fails at startup with `host not found in upstream "<fqdn>:443"` and never starts. Fix DNS for the Exchange FQDN (or use an IP) and restart.
 
 ### NTLM logging
 

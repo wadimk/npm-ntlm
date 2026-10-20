@@ -52,7 +52,7 @@ advanced-custom-nginx.conf.template — шаблон Advanced-конфига х�
 - `SEED: не удалось авторизоваться в API NPM ...` — учётные данные не совпадают с реальным администратором (типично для существующей базы); сидер пробует ~5 минут и сдаётся. На работу NPM это не влияет.
 - Строк `SEED` нет совсем — `NPM_SEED_PROXY_HOST` не равен `true`, сидер не запускался.
 
-Сертификат Let's Encrypt и **Force SSL** по-прежнему включаются вручную в UI (Hosts → Proxy Hosts → Edit → SSL) — после того как DNS обоих FQDN указывает на хост NPM.
+Сертификат Let's Encrypt и **Force SSL** по-прежнему включаются вручную в UI (Hosts → Proxy Hosts → Edit → SSL) — после того как DNS всех доменов хоста указывает на NPM.
 
 ### Ручная вставка (запасной путь)
 
@@ -62,6 +62,21 @@ advanced-custom-nginx.conf.template — шаблон Advanced-конфига х�
 export EXCHANGE_FQDN=exchange.internal.example.com OWA_FQDN=owa.example.com
 envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 ```
+
+### Что входит в создаваемый конфиг
+
+- `/` редиректит (302) на `/owa`; `/healthz` отдаёт `200 ok` для мониторинга;
+- **`/powershell` и `/ecp` возвращают 403** — Remote PowerShell и админка Exchange не выставлены в интернет. Чтобы открыть ECP (например, только для своих IP), отредактируйте Advanced-конфиг по комментарию в шаблоне;
+- каждая NTLM-локация пишет рукопожатия в `/var/log/nginx/ntlm_access.log` (см. «Логирование NTLM» ниже).
+
+### Жизненный цикл сидера (что меняется при рестартах)
+
+Сидер работает в режиме **только создание**: существование хоста проверяется по `OWA_FQDN`, и существующий Proxy Host никогда не изменяется — ваши правки в UI (сертификат, Force SSL, …) переживают рестарты.
+
+- Изменение `AUTODISCOVER_FQDN` после сидирования (пусто → задан → другое значение → снова пусто) не меняет **ничего**: список доменов фиксируется при создании. Чтобы применить: удалите Proxy Host в UI и сделайте `docker compose restart` — сидер пересоздаст его с актуальными значениями (сертификат и Force SSL затем привяжите заново).
+- Изменение `EXCHANGE_FQDN` применяется при рестарте лишь **частично**: upstream `exch_ntlm` в `http_top.conf` перерендеривается при каждом старте, но Advanced-конфиг в базе NPM хранит значение, подставленное при сидировании (`proxy_pass` в блоке `/owa/`). Пересоздайте хост или поправьте Advanced-конфиг в UI.
+- Изменение `OWA_FQDN` создаёт **второй** Proxy Host вместо переименования старого — проверка существования привязана к этому значению.
+- Сертификаты: Let's Encrypt проверяет по HTTP-01 **каждый** домен из `domain_names`. Если у любого домена (например, autodiscover) нет A-записи на хост NPM, весь выпуск падает с «Internal Error» — уже выпущенный сертификат при этом не страдает. Сначала создайте DNS-запись (`dig +short autodiscover.example.com @8.8.8.8`), потом запрашивайте сертификат.
 
 ## Обновление до новой версии NPM
 
@@ -159,6 +174,7 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - **NTLM-диалог в браузере для OWA/ECP** — не включена HMA.
 - **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что задан `EXCHANGE_FQDN`, и перезапустите контейнер (entrypoint сам восстановит шаблон из образа в том, если его там нет). Если переменная задана, а рендеринг пропущен, entrypoint пишет предупреждение в лог.
 - **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
+- **Connection refused на всех портах (даже UI не открывается)** — `EXCHANGE_FQDN` не резолвится из контейнера: nginx падает при старте с `host not found in upstream "<fqdn>:443"` и вообще не запускается. Почините DNS для FQDN Exchange (или используйте IP) и перезапустите.
 
 ### Логирование NTLM
 

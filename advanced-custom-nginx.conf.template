@@ -148,9 +148,9 @@ location /oab {
   error_log  /var/log/nginx/ntlm_error.log warn;
 }
 
-# ---------- OWA и ECP (pass-through, без NTLM) ----------
+# ---------- OWA (pass-through, без NTLM) ----------
 # Host должен совпадать с URL виртуальных каталогов Exchange.
-# Authorization обрезается — NTLM в OWA/ECP не проходит.
+# Authorization обрезается — NTLM в OWA не проходит.
 
 location /owa/ {
   proxy_set_header Host ${OWA_FQDN};
@@ -160,13 +160,16 @@ location /owa/ {
   proxy_pass https://${EXCHANGE_FQDN};
 }
 
-# NB: ECP — это админка Exchange. Если она не нужна снаружи, лучше
-# ограничить доступ по IP: добавьте в начало блока, например,
+# ECP — админка Exchange, снаружи закрыта (best practice).
+# Чтобы открыть: удалите этот блок — тогда /ecp уйдёт в дефолтный location
+# NPM и будет проксироваться на Exchange. Чтобы открыть только своим —
+# замените return 403 на allow/deny плюс proxy-директивы как у /owa/ выше:
 #   allow 203.0.113.0/24; deny all;
+#   proxy_set_header Host ${OWA_FQDN};
+#   proxy_set_header Authorization "";
+#   proxy_ssl_name ${EXCHANGE_FQDN};
+#   proxy_redirect off;
+#   proxy_pass https://${EXCHANGE_FQDN};
 location /ecp/ {
-  proxy_set_header Host ${OWA_FQDN};
-  proxy_set_header Authorization "";
-  proxy_ssl_name ${EXCHANGE_FQDN};
-  proxy_redirect off; # preserve Location headers from Exchange
-  proxy_pass https://${EXCHANGE_FQDN};
+  return 403;
 }
