@@ -42,6 +42,14 @@ On container start `seed-proxy-host.sh` waits for the NPM backend, logs in via t
 
 > If the Proxy Host was created earlier **manually** (e.g. with an old hand-edited Advanced config), the seeder will skip it. Either delete the host in the UI and restart the container, or replace its Advanced config with the freshly rendered template.
 
+`INITIAL_ADMIN_*` play two roles. On a **fresh install** (empty database) NPM itself creates the admin account with these credentials — set them before the very first start and there will be no setup wizard; the seeder then logs in with the same values, so everything matches by construction. On an **existing installation** NPM ignores them (the admin already exists), but the seeder still uses them to log in — so they must contain the real credentials of the admin account you use in the UI.
+
+If the seeder cannot run, nothing breaks — NPM starts normally, only the automatic Proxy Host creation is skipped. Which branch happened is visible in the container log (`docker logs nginxproxymanager_app_1 | grep SEED`):
+
+- `SEED: пропуск — не заданы переменные: ...` — a required variable is missing (e.g. `INITIAL_ADMIN_*`); the seeder exits immediately, without waiting. On a fresh install NPM then shows the setup wizard and the Proxy Host is created manually.
+- `SEED: не удалось авторизоваться в API NPM ...` — the credentials do not match the real admin (typical for an existing database); the seeder retries for ~5 minutes, then gives up. NPM itself keeps working.
+- No `SEED` lines at all — `NPM_SEED_PROXY_HOST` is not `true`, the seeder never started.
+
 The Let's Encrypt certificate and **Force SSL** are still enabled manually in the UI (Hosts → Proxy Hosts → Edit → SSL) — after DNS for both FQDNs points at the NPM host.
 
 ### Manual paste (fallback)
