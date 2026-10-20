@@ -142,44 +142,45 @@ The upstream from `http_top.conf` is picked up by NPM automatically (the file is
 
 ## Exchange 2019 configuration
 
-Align the URLs (Exchange Management Shell example):
+Align the URLs (Exchange Management Shell example): ExternalUrl — the public FQDN behind the proxy, InternalUrl — the internal Exchange FQDN (no split DNS needed):
 
 ```powershell
 Set-OwaVirtualDirectory -Identity "EXCH01\owa (Default Web Site)" `
-  -InternalUrl "https://owa.example.com/owa" `
+  -InternalUrl "https://exchange.internal.example.com/owa" `
   -ExternalUrl "https://owa.example.com/owa"
 
 Set-EcpVirtualDirectory -Identity "EXCH01\ecp (Default Web Site)" `
-  -InternalUrl "https://owa.example.com/ecp" `
+  -InternalUrl "https://exchange.internal.example.com/ecp" `
   -ExternalUrl "https://owa.example.com/ecp"
 ```
 
 Align the URLs of the remaining client-facing services the same way (otherwise Autodiscover answers with errors like "No external URL is available to access this mailbox with Exchange ActiveSync"):
 
 ```powershell
-$server = "EXCH01"
-$fqdn   = "owa.example.com"
+$server  = "EXCH01"
+$fqdn    = "owa.example.com"                    # public, behind the proxy
+$intfqdn = "exchange.internal.example.com"      # internal Exchange FQDN
 
 Set-ActiveSyncVirtualDirectory -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" `
-  -ExternalUrl "https://$fqdn/Microsoft-Server-ActiveSync" -InternalUrl "https://$fqdn/Microsoft-Server-ActiveSync"
+  -ExternalUrl "https://$fqdn/Microsoft-Server-ActiveSync" -InternalUrl "https://$intfqdn/Microsoft-Server-ActiveSync"
 
 Set-EwsVirtualDirectory -Identity "$server\EWS (Default Web Site)" `
-  -ExternalUrl "https://$fqdn/EWS/exchange.asmx" -InternalUrl "https://$fqdn/EWS/exchange.asmx"
+  -ExternalUrl "https://$fqdn/EWS/exchange.asmx" -InternalUrl "https://$intfqdn/EWS/exchange.asmx"
 
 Set-OabVirtualDirectory -Identity "$server\OAB (Default Web Site)" `
-  -ExternalUrl "https://$fqdn/OAB" -InternalUrl "https://$fqdn/OAB"
+  -ExternalUrl "https://$fqdn/OAB" -InternalUrl "https://$intfqdn/OAB"
 
 Set-MapiVirtualDirectory -Identity "$server\mapi (Default Web Site)" `
-  -ExternalUrl "https://$fqdn/mapi" -InternalUrl "https://$fqdn/mapi"
+  -ExternalUrl "https://$fqdn/mapi" -InternalUrl "https://$intfqdn/mapi"
 
 Set-OutlookAnywhere -Identity "$server\Rpc (Default Web Site)" `
-  -ExternalHostname $fqdn -InternalHostname $fqdn `
+  -ExternalHostname $fqdn -InternalHostname $intfqdn `
   -ExternalClientsRequireSsl $true -InternalClientsRequireSsl $true `
   -ExternalClientAuthenticationMethod Negotiate -InternalClientAuthenticationMethod NTLM `
   -SSLOffloading $false
 ```
 
-> Pointing InternalUrl at the public FQDN requires **split DNS** (inside the LAN the public name must resolve to the NPM host). Without it, keep InternalUrl on the internal FQDN.
+> With InternalUrl on the internal FQDN, LAN clients talk to Exchange directly — the IIS certificate on Exchange must be valid for the internal name (internal CA or an already trusted one). If you later add **split DNS** (the public name resolving to the NPM host inside the LAN), you can point InternalUrl at the public FQDN as well.
 
 If you run a hybrid configuration with Microsoft 365 — switch OWA/ECP to Hybrid Modern Authentication (OAuth), disabling legacy methods:
 
