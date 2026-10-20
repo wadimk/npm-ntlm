@@ -124,6 +124,10 @@ COPY advanced-custom-nginx.conf.template /templates/advanced-custom-nginx.conf.t
 COPY data/nginx/custom/http_top.conf.template /templates/http_top.conf.template
 COPY seed-proxy-host.sh /usr/local/bin/seed-proxy-host.sh
 
+# TLS-политика: intermediate-набор Mozilla + CBC-сьюты из списка Microsoft 365
+# (переопределяет файл образа nginx-full, глобально для всех Proxy Hosts)
+COPY ssl-ciphers.conf /etc/nginx/conf.d/include/ssl-ciphers.conf
+
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh /usr/local/bin/seed-proxy-host.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -35,6 +35,10 @@ advanced-custom-nginx.conf.template — шаблон Advanced-конфига х�
                                   ${EXCHANGE_FQDN} и ${OWA_FQDN}; вшивается в образ
                                   (/templates/), рендерится сидером через envsubst либо
                                   вручную для вставки в UI: Proxy Host -> Advanced (порт 81)
+ssl-ciphers.conf                — TLS-политика, вшивается в образ поверх одноимённого файла
+                                  nginx-full (глобально для всех хостов): TLS 1.2/1.3,
+                                  набор Mozilla-intermediate + CBC-сьюты из списка
+                                  Microsoft 365 (для старых клиентов Schannel)
 README.md                       — основная инструкция (английский): плейсхолдеры,
                                   настройка UI, PowerShell-команды для Exchange, диагностика
 README.ru.md                    — русская версия README.md
@@ -88,3 +92,4 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 - В репозитории не хранить реальные FQDN, IP-адреса, сертификаты и учётные данные — только плейсхолдеры.
 - Каталог `./letsencrypt` монтируется в контейнер, но в репозиторий не входит; сертификаты туда не коммитить.
 - Для NTLM location-блоков критичны `proxy_http_version 1.1` и пустой заголовок `Connection` — удаление сломает NTLM-аутентификацию. Они выставляются только per-location: в общем блоке Advanced-конфига их быть не должно — NPM 2.16 сам генерирует эти директивы на уровне `server {}`, а дубликат даёт `nginx: [emerg] duplicate ... directive`. В OWA-блоке заголовок `Authorization` намеренно обрезается (`proxy_set_header Authorization "";`) — это осознанное решение, а не ошибка. `/powershell` и `/ecp` закрыты (403) намеренно — харденинг edge'а; не открывать без явного запроса пользователя.
+- Сертификат LE для Exchange-хоста выпускать с Key Type: RSA: все TLS 1.2-сьюты из списка Microsoft 365 — `ECDHE-RSA-*`, с ECDSA-сертификатом общих сьютов на TLS 1.2 нет (работает только TLS 1.3). CBC-сьюты в `ssl-ciphers.conf` — осознанное расширение под старые клиенты Schannel, не удалять.

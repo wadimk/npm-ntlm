@@ -17,6 +17,8 @@ docker-compose.yml            — стек NPM (собирается локал�
 data/nginx/custom/http_top.conf.template — шаблон upstream exch_ntlm с включённым NTLM
                               (вшит в образ; entrypoint восстанавливает его в том при старте,
                               если файл отсутствует)
+ssl-ciphers.conf              — TLS-политика, вшитая в образ (глобально): TLS 1.2/1.3,
+                              Mozilla-intermediate + CBC-сьюты из списка Microsoft 365
 advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста (вшит в образ,
                               рендерится через envsubst; применяется сидером или вставляется вручную)
 ```
@@ -77,6 +79,20 @@ envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 - Изменение `EXCHANGE_FQDN` применяется при рестарте лишь **частично**: upstream `exch_ntlm` в `http_top.conf` перерендеривается при каждом старте, но Advanced-конфиг в базе NPM хранит значение, подставленное при сидировании (`proxy_pass` в блоке `/owa/`). Пересоздайте хост или поправьте Advanced-конфиг в UI.
 - Изменение `OWA_FQDN` создаёт **второй** Proxy Host вместо переименования старого — проверка существования привязана к этому значению.
 - Сертификаты: Let's Encrypt проверяет по HTTP-01 **каждый** домен из `domain_names`. Если у любого домена (например, autodiscover) нет A-записи на хост NPM, весь выпуск падает с «Internal Error» — уже выпущенный сертификат при этом не страдает. Сначала создайте DNS-запись (`dig +short autodiscover.example.com @8.8.8.8`), потом запрашивайте сертификат.
+
+### TLS и совместимость с Microsoft 365
+
+По [документу Microsoft 365 про шифрование](https://learn.microsoft.com/en-us/purview/technical-reference-details-about-encryption) сторона Microsoft 365 говорит TLS 1.2/1.3 с фиксированным списком шифров — все TLS 1.2-сьюты там `ECDHE-RSA-*`. Образ выровнен под него:
+
+- `ssl-ciphers.conf` (вшит в образ, глобально для всех Proxy Hosts) включает TLS 1.2 + 1.3 и расширяет стоковый набор Mozilla-intermediate сьютами `ECDHE-RSA-AES256-SHA384` / `ECDHE-RSA-AES128-SHA256` (CBC) — они нужны старым клиентам Schannel (старые Windows/Outlook) без AES-GCM. GCM-сьюты остаются приоритетными;
+- **сертификат запрашивайте с Key Type: RSA** (селектор есть в форме выпуска сертификата в UI). С ECDSA-сертификатом ни один `ECDHE-RSA-*` сьют на TLS 1.2 не согласуется — останется только TLS 1.3, и старые клиенты не подключатся. Если сертификат уже выпущен как ECDSA: перевыпустите с RSA (UI → SSL Certificates → Add, затем привяжите к Proxy Host) — пересоздание хоста не требуется.
+
+Проверка на живом хосте:
+
+```bash
+echo | openssl s_client -connect owa.example.com:443 -servername owa.example.com -tls1_2 \
+  -cipher ECDHE-RSA-AES256-SHA384 2>/dev/null | grep 'Cipher is'   # должен показать сьют, а не 0000
+```
 
 ## Обновление до новой версии NPM
 

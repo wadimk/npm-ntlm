@@ -17,6 +17,8 @@ docker-compose.yml            — NPM stack (built locally, image npm-ntlm:lates
 data/nginx/custom/http_top.conf.template — exch_ntlm upstream template with NTLM enabled
                               (also baked into the image; the entrypoint restores it into
                               the volume on start if missing)
+ssl-ciphers.conf              — TLS policy baked into the image (global): TLS 1.2/1.3,
+                              Mozilla-intermediate + CBC suites from the Microsoft 365 list
 advanced-custom-nginx.conf.template — per-host Advanced config template (baked into the image,
                               rendered with envsubst; applied by the seeder or pasted manually)
 ```
@@ -77,6 +79,20 @@ The seeder is **create-only**: existence is checked by `OWA_FQDN`, and an existi
 - Changing `EXCHANGE_FQDN` applies only **partially** on restart: the `exch_ntlm` upstream in `http_top.conf` is re-rendered on every start, but the Advanced config stored in the NPM database keeps the value baked in at seed time (the `proxy_pass` of the `/owa/` block). Recreate the host or fix the Advanced config in the UI.
 - Changing `OWA_FQDN` creates a **second** Proxy Host instead of renaming the old one — the existence check keys on it.
 - Certificates: Let's Encrypt validates **every** domain in `domain_names` over HTTP-01. If any domain (e.g. autodiscover) has no A record pointing at the NPM host, the whole request fails with "Internal Error" — an already issued certificate is not affected. Create DNS first (`dig +short autodiscover.example.com @8.8.8.8`), then request the certificate.
+
+### TLS and Microsoft 365 compatibility
+
+Per [Microsoft 365 encryption reference](https://learn.microsoft.com/en-us/purview/technical-reference-details-about-encryption), the Microsoft 365 side speaks TLS 1.2/1.3 with a fixed cipher list — all TLS 1.2 suites there are `ECDHE-RSA-*`. The image aligns with it:
+
+- `ssl-ciphers.conf` (baked into the image, global for all Proxy Hosts) enables TLS 1.2 + 1.3 and extends the stock Mozilla-intermediate list with `ECDHE-RSA-AES256-SHA384` / `ECDHE-RSA-AES128-SHA256` (CBC) — needed by legacy Schannel clients (older Windows/Outlook) that lack AES-GCM. GCM suites stay preferred;
+- **request the certificate with Key Type: RSA** (the UI shows the selector in the certificate request form). With an ECDSA certificate no `ECDHE-RSA-*` suite can be negotiated on TLS 1.2 — only TLS 1.3 would work, and legacy clients would fail. If the certificate was already issued as ECDSA: re-request it with RSA (UI → SSL Certificates → Add, then bind it to the Proxy Host) — no host recreation needed.
+
+Verify against the live host:
+
+```bash
+echo | openssl s_client -connect owa.example.com:443 -servername owa.example.com -tls1_2 \
+  -cipher ECDHE-RSA-AES256-SHA384 2>/dev/null | grep 'Cipher is'   # must show the cipher, not 0000
+```
 
 ## Updating to a new NPM version
 
