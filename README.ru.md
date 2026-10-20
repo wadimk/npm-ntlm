@@ -129,15 +129,10 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 
 ### Логирование NTLM
 
-Раскомментируйте `log_format ntlm_log` в `http_top.conf` (или в шаблоне `http_top.conf.template`, если используете `EXCHANGE_FQDN`) и добавьте в NTLM location-блоки:
-
-```
-access_log /var/log/nginx/ntlm_access.log ntlm_log;
-error_log  /var/log/nginx/ntlm_error.log warn;
-```
-
-Затем:
+Логирование NTLM-рукопожатий включено из коробки: `log_format ntlm_log` объявлен в шаблоне upstream'а, а каждый NTLM location-блок в `advanced-custom-nginx.conf` пишет в `/var/log/nginx/ntlm_access.log` (ошибки — в `/var/log/nginx/ntlm_error.log`). Смотреть рукопожатия:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
 ```
+
+Чтобы выключить — уберите строки `access_log` / `error_log` из NTLM location-блоков в Advanced-конфиге Proxy Host.

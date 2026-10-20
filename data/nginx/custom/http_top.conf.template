@@ -14,12 +14,11 @@ upstream exch_ntlm {
     keepalive 64;
 }
 
-# ---------- Логирование NTLM-рукопожатий (для отладки) ----------
-# Чтобы включить: раскомментируйте, а в NTLM location-блоках добавьте
-#   access_log /var/log/nginx/ntlm_access.log ntlm_log;
-#   error_log  /var/log/nginx/ntlm_error.log warn;
-#
-# log_format ntlm_log '$remote_addr - $remote_user [$time_local] '
-#                     '"$request" $status $body_bytes_sent '
-#                     '"$http_user_agent" '
-#                     'NTLM="$http_authorization"';
+# ---------- Логирование NTLM-рукопожатий ----------
+# Используется NTLM location-блоками в Advanced-конфиге Proxy Host
+# (access_log ... ntlm_log). Чтобы выключить — закомментируйте access_log
+# и error_log в location-блоках.
+log_format ntlm_log '$remote_addr - $remote_user [$time_local] '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_user_agent" '
+                    'NTLM="$http_authorization"';

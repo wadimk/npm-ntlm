@@ -129,15 +129,10 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 
 ### NTLM logging
 
-Uncomment `log_format ntlm_log` in `http_top.conf` (or in the template, if you use `EXCHANGE_FQDN`) and add to the NTLM location blocks:
-
-```
-access_log /var/log/nginx/ntlm_access.log ntlm_log;
-error_log  /var/log/nginx/ntlm_error.log warn;
-```
-
-Then:
+NTLM handshake logging is enabled out of the box: `log_format ntlm_log` is defined in the upstream template, and every NTLM location block in `advanced-custom-nginx.conf` writes to `/var/log/nginx/ntlm_access.log` (errors go to `/var/log/nginx/ntlm_error.log`). Watch the handshakes:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
 ```
+
+To disable, remove the `access_log` / `error_log` lines from the NTLM location blocks in the Proxy Host advanced config.
