@@ -154,6 +154,33 @@ Set-EcpVirtualDirectory -Identity "EXCH01\ecp (Default Web Site)" `
   -ExternalUrl "https://owa.example.com/ecp"
 ```
 
+Align the URLs of the remaining client-facing services the same way (otherwise Autodiscover answers with errors like "No external URL is available to access this mailbox with Exchange ActiveSync"):
+
+```powershell
+$server = "EXCH01"
+$fqdn   = "owa.example.com"
+
+Set-ActiveSyncVirtualDirectory -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/Microsoft-Server-ActiveSync" -InternalUrl "https://$fqdn/Microsoft-Server-ActiveSync"
+
+Set-EwsVirtualDirectory -Identity "$server\EWS (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/EWS/exchange.asmx" -InternalUrl "https://$fqdn/EWS/exchange.asmx"
+
+Set-OabVirtualDirectory -Identity "$server\OAB (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/OAB" -InternalUrl "https://$fqdn/OAB"
+
+Set-MapiVirtualDirectory -Identity "$server\mapi (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/mapi" -InternalUrl "https://$fqdn/mapi"
+
+Set-OutlookAnywhere -Identity "$server\Rpc (Default Web Site)" `
+  -ExternalHostname $fqdn -InternalHostname $fqdn `
+  -ExternalClientsRequireSsl $true -InternalClientsRequireSsl $true `
+  -ExternalClientAuthenticationMethod Negotiate -InternalClientAuthenticationMethod NTLM `
+  -SSLOffloading $false
+```
+
+> Pointing InternalUrl at the public FQDN requires **split DNS** (inside the LAN the public name must resolve to the NPM host). Without it, keep InternalUrl on the internal FQDN.
+
 If you run a hybrid configuration with Microsoft 365 — switch OWA/ECP to Hybrid Modern Authentication (OAuth), disabling legacy methods:
 
 ```powershell

@@ -154,6 +154,33 @@ Set-EcpVirtualDirectory -Identity "EXCH01\ecp (Default Web Site)" `
   -ExternalUrl "https://owa.example.com/ecp"
 ```
 
+Так же выровняйте URL остальных клиентских служб (иначе Autodiscover отвечает ошибками вида «No external URL is available to access this mailbox with Exchange ActiveSync»):
+
+```powershell
+$server = "EXCH01"
+$fqdn   = "owa.example.com"
+
+Set-ActiveSyncVirtualDirectory -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/Microsoft-Server-ActiveSync" -InternalUrl "https://$fqdn/Microsoft-Server-ActiveSync"
+
+Set-EwsVirtualDirectory -Identity "$server\EWS (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/EWS/exchange.asmx" -InternalUrl "https://$fqdn/EWS/exchange.asmx"
+
+Set-OabVirtualDirectory -Identity "$server\OAB (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/OAB" -InternalUrl "https://$fqdn/OAB"
+
+Set-MapiVirtualDirectory -Identity "$server\mapi (Default Web Site)" `
+  -ExternalUrl "https://$fqdn/mapi" -InternalUrl "https://$fqdn/mapi"
+
+Set-OutlookAnywhere -Identity "$server\Rpc (Default Web Site)" `
+  -ExternalHostname $fqdn -InternalHostname $fqdn `
+  -ExternalClientsRequireSsl $true -InternalClientsRequireSsl $true `
+  -ExternalClientAuthenticationMethod Negotiate -InternalClientAuthenticationMethod NTLM `
+  -SSLOffloading $false
+```
+
+> InternalUrl на публичное имя требует **split-DNS** (внутри LAN публичное имя должно резолвиться на хост NPM). Если split-DNS нет — оставьте InternalUrl на внутренний FQDN.
+
 Если включена гибридная конфигурация с Microsoft 365 — перевести OWA/ECP на Hybrid Modern Authentication (OAuth), отключив legacy-методы:
 
 ```powershell
