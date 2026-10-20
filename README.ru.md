@@ -182,6 +182,18 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - `https://owa.example.com/owa` — страница входа Microsoft 365 (при HMA), а не NTLM-диалог и не форма OWA.
 - Outlook и ActiveSync подключаются через NTLM и Autodiscover.
 
+### Autodiscover и NTLM-аутентификация
+
+- «Голый» запрос к `https://autodiscover.example.com/Autodiscover/Autodiscover.xml`, отвечающий **401** с `WWW-Authenticate: Basic, Negotiate, NTLM` — это **ожидаемый первый этап**, а не ошибка: Exchange отвечает через прокси и предлагает методы аутентификации. Дальше клиент должен повторить запрос уже с учётными данными.
+- Проверка аутентифицированного запроса снаружи (любой финальный статус, кроме 401 — обычно 400/405 для GET — означает, что NTLM-аутентификация прошла через прокси):
+
+```bash
+curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
+  https://autodiscover.example.com/Autodiscover/Autodiscover.xml -o /dev/null
+```
+
+- В Microsoft Connectivity Analyzer имя пользователя указывайте полным UPN (`user@example.com`). Если тест сообщает «failed to obtain an Autodiscover XML response» с 401 — сначала перепроверьте учётные данные; параллельно с повторным тестом смотрите рукопожатия в `ntlm_access.log` (см. «Логирование NTLM» ниже): последовательность 401 → 401 → 200/400 означает, что рукопожатие работает, тишина или обрыв после первого 401 — что нет.
+
 ## Диагностика
 
 - **Циклические редиректы** — URL виртуальных каталогов не совпадают с публичным DNS или неверные reply URL в Entra ID.

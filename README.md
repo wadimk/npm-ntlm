@@ -182,6 +182,18 @@ Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 - `https://owa.example.com/owa` — the Microsoft 365 sign-in page (with HMA), not an NTLM prompt and not the OWA form.
 - Outlook and ActiveSync connect via NTLM and Autodiscover.
 
+### Autodiscover and NTLM authentication
+
+- A bare request to `https://autodiscover.example.com/Autodiscover/Autodiscover.xml` returning **401** with `WWW-Authenticate: Basic, Negotiate, NTLM` is the **expected first stage**, not an error — Exchange answers through the proxy and offers auth methods. The client must then repeat the request with credentials.
+- Verify the authenticated leg from outside (any final status other than 401 — usually 400/405 for a GET — means NTLM auth passed through the proxy):
+
+```bash
+curl -v --ntlm -u 'user@example.com:PASSWORD' \
+  https://autodiscover.example.com/Autodiscover/Autodiscover.xml -o /dev/null
+```
+
+- In the Microsoft Connectivity Analyzer use the full UPN (`user@example.com`) as the username. If it reports "failed to obtain an Autodiscover XML response" with a 401, first re-check the credentials — and while re-running the test, watch the NTLM handshakes in `ntlm_access.log` (see "NTLM logging" below): 401 → 401 → 200/400 means the handshake works, silence or a stall after the first 401 means it does not.
+
 ## Troubleshooting
 
 - **Redirect loops** — virtual directory URLs do not match public DNS, or wrong reply URLs in Entra ID.

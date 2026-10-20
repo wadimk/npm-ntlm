@@ -70,6 +70,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 1. `nginx -t` внутри контейнера после изменений конфигов.
 2. `https://owa.example.com/owa` — при включённой HMA открывается страница входа Microsoft 365, а не NTLM-диалог.
 3. Outlook/ActiveSync подключаются через NTLM и Autodiscover.
+4. Autodiscover: первый ответ 401 с `WWW-Authenticate: Basic, Negotiate, NTLM` — норма (этап согласования аутентификации). Аутентифицированный прогон: `curl --ntlm -u 'user:pass' https://autodiscover.example.com/Autodiscover/Autodiscover.xml` — финальный статус ≠ 401 означает, что NTLM прошёл; рукопожатия видны в `/var/log/nginx/ntlm_access.log`.
 
 Типовые симптомы сбоев описаны в разделе «Диагностика» README.md (циклические редиректы, 400/502, пустая страница после входа, NTLM-диалог).
 
