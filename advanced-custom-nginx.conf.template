@@ -180,3 +180,8 @@ location /owa/ {
 location /ecp/ {
   return 403;
 }
+# Голый /ecp (без слэша) — тоже 403, иначе он уйдёт в дефолтный location
+# и Exchange ответит 302, подтвердив наличие ECP.
+location = /ecp {
+  return 403;
+}

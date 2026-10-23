@@ -21,6 +21,8 @@ ssl-ciphers.conf              — TLS-политика, вшитая в обра
                               Mozilla-intermediate + CBC-сьюты из списка Microsoft 365
 advanced-custom-nginx.conf.template — шаблон Advanced-конфига хоста (вшит в образ,
                               рендерится через envsubst; применяется сидером или вставляется вручную)
+Test-ExchangeProxy.ps1          — скрипт сквозной валидации: DNS, TLS/RSA-сертификат,
+                              edge-харденинг, аутентифицированный Autodiscover POST
 ```
 
 ## Настройка FQDN
@@ -226,6 +228,17 @@ curl -s --ntlm -u 'DOMAIN\user' -H 'Content-Type: text/xml' \
 
 - `https://owa.example.com/owa` — страница входа Microsoft 365 (при HMA), а не NTLM-диалог и не форма OWA.
 - Outlook и ActiveSync подключаются через NTLM и Autodiscover.
+
+### Автоматическая валидация (Test-ExchangeProxy.ps1)
+
+`Test-ExchangeProxy.ps1` выполняет всю внешнюю проверку одним запуском (PowerShell 5.1+ / 7+): DNS-записи, рукопожатия TLS 1.2/1.3, RSA-сертификат (SAN, срок), edge-харденинг (`/healthz`, редирект `/` → `/owa`, 403 на `/powershell` и `/ecp/`, редирект http→https), auth-challenge на ActiveSync/Autodiscover и — с учётными данными — аутентифицированный Autodiscover POST с проверкой URL (EXPR/OWA) в ответе:
+
+```powershell
+.\Test-ExchangeProxy.ps1 -OwaFqdn owa.example.com -AutodiscoverFqdn autodiscover.example.com `
+    -MailAddress user@example.com -ExpectedIp 203.0.113.10
+```
+
+NTLM-учётные данные спрашиваются интерактивно (UPN `user@office.example.com` или `DOMAIN\user` — не обязательно совпадает с SMTP-адресом). Каждая проверка печатает PASS/FAIL/SKIP; код выхода 0 — только когда нет ни одного FAIL.
 
 ### Autodiscover и NTLM-аутентификация
 

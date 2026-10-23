@@ -41,6 +41,9 @@ ssl-ciphers.conf                — TLS-политика, вшивается в 
                                   Microsoft 365 (для старых клиентов Schannel)
 README.md                       — основная инструкция (английский): плейсхолдеры,
                                   настройка UI, PowerShell-команды для Exchange, диагностика
+Test-ExchangeProxy.ps1          — PowerShell-скрипт сквозной валидации снаружи: DNS,
+                                  TLS/RSA-сертификат, edge-харденинг (403 на /powershell и
+                                  /ecp), Autodiscover POST с разбором XML-ответа
 README.ru.md                    — русская версия README.md
 .github/workflows/docker-publish.yml — CI: мультиплатформенная сборка и пуш
                                   vkosin/npm-ntlm:latest в Docker Hub при пуше в main

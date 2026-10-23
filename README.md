@@ -21,6 +21,8 @@ ssl-ciphers.conf              — TLS policy baked into the image (global): TLS 
                               Mozilla-intermediate + CBC suites from the Microsoft 365 list
 advanced-custom-nginx.conf.template — per-host Advanced config template (baked into the image,
                               rendered with envsubst; applied by the seeder or pasted manually)
+Test-ExchangeProxy.ps1          — end-to-end validation script: DNS, TLS/RSA certificate,
+                              edge hardening, authenticated Autodiscover POST
 ```
 
 ## FQDN configuration
@@ -226,6 +228,17 @@ Expected: `200 OK` with a `<Response>` containing the user's `<Account>` and `<P
 
 - `https://owa.example.com/owa` — the Microsoft 365 sign-in page (with HMA), not an NTLM prompt and not the OWA form.
 - Outlook and ActiveSync connect via NTLM and Autodiscover.
+
+### Automated validation (Test-ExchangeProxy.ps1)
+
+`Test-ExchangeProxy.ps1` runs the whole external check in one go (PowerShell 5.1+ / 7+): DNS records, TLS 1.2/1.3 handshake, RSA certificate with SAN coverage and expiry, edge hardening (`/healthz`, `/` → `/owa` redirect, 403 on `/powershell` and `/ecp/`, http→https redirect), auth challenges on ActiveSync/Autodiscover and — with credentials — the authenticated Autodiscover POST with EXPR/OWA URL validation:
+
+```powershell
+.\Test-ExchangeProxy.ps1 -OwaFqdn owa.example.com -AutodiscoverFqdn autodiscover.example.com `
+    -MailAddress user@example.com -ExpectedIp 203.0.113.10
+```
+
+The NTLM credentials are prompted interactively (UPN `user@office.example.com` or `DOMAIN\user` — not necessarily the SMTP address). Every check prints PASS/FAIL/SKIP; exit code is 0 only when nothing failed.
 
 ### Autodiscover and NTLM authentication
 
