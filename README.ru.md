@@ -192,7 +192,7 @@ Get-OwaVirtualDirectory -Server "EXCH01" | Set-OwaVirtualDirectory `
 
 Get-EcpVirtualDirectory -Server "EXCH01" | Set-EcpVirtualDirectory `
   -AdfsAuthentication $false -BasicAuthentication $false `
-  -FormsAuthentication $false -DigestAuthenticaGhjtion $false `
+  -FormsAuthentication $false -DigestAuthentication $false `
   -WindowsAuthentication $false -OAuthAuthentication $true
 ```
 
@@ -204,6 +204,23 @@ Get-EcpVirtualDirectory -Server "EXCH01" | Set-EcpVirtualDirectory `
 Get-OwaVirtualDirectory -Server "EXCH01" | fl server,*auth*
 Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 ```
+
+### Проверка через Autodiscover
+
+Самая информативная сквозная проверка URL на стороне Exchange — аутентифицированный Autodiscover POST снаружи (логин для NTLM — **UPN** `user@office.example.com` или `DOMAIN\user`; он может отличаться от SMTP-адреса ящика — SMTP-адрес указывается только в `EMailAddress` внутри XML):
+
+```bash
+printf '%s' '<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006"><Request><EMailAddress>user@example.com</EMailAddress><AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema></Request></Autodiscover>' > /tmp/autod.xml
+
+curl -s --ntlm -u 'DOMAIN\user' -H 'Content-Type: text/xml' \
+  --data @/tmp/autod.xml https://autodiscover.example.com/Autodiscover/Autodiscover.xml
+```
+
+Ожидается: `200 OK` с `<Response>`, содержащим `<Account>` пользователя и блоки `<Protocol>`. На что смотреть:
+
+- `EXPR → <Server>` должен быть **публичным** FQDN (`owa.example.com`). Если там внутренний FQDN — `Set-OutlookAnywhere -ExternalHostname` не применился, и внешний Outlook не подключится. Повторите командлет, сделайте `iisreset /noforce`, проверьте снова.
+- `WEB/External → OWAUrl` и `EXPR → OABUrl` должны быть публичными URL; `EXCH → <Server>` в виде GUID ящика (`<guid>@example.com`) — норма для Exchange 2013+.
+- `<ErrorCode>600</ErrorCode>` («Invalid Request») означает, что сломан сам XML-запрос (например, переносы строк внутри `EMailAddress` из-за копипасты) — аутентификация к этому моменту уже прошла.
 
 ## Проверка
 
@@ -220,7 +237,8 @@ curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
   https://autodiscover.example.com/Autodiscover/Autodiscover.xml -o /dev/null
 ```
 
-- В Microsoft Connectivity Analyzer имя пользователя указывайте полным UPN (`user@example.com`). Если тест сообщает «failed to obtain an Autodiscover XML response» с 401 — сначала перепроверьте учётные данные; параллельно с повторным тестом смотрите рукопожатия в `ntlm_access.log` (см. «Логирование NTLM» ниже): последовательность 401 → 401 → 200/400 означает, что рукопожатие работает, тишина или обрыв после первого 401 — что нет.
+- В Microsoft Connectivity Analyzer поле **User Name** — это UPN (`user@office.example.com`) или `DOMAIN\user`; он может отличаться от SMTP-адреса ящика, который указывается в поле **Email Address**. Если тест сообщает «failed to obtain an Autodiscover XML response» с 401 — сначала перепроверьте учётные данные; параллельно с повторным тестом смотрите рукопожатия в `ntlm_access.log` (см. «Логирование NTLM» ниже): последовательность 401 → 401 → 200/400 означает, что рукопожатие работает, тишина или обрыв после первого 401 — что нет.
+- RCA всегда сначала пробует `https://<домен>/Autodiscover/...` и `https://www.<домен>/...`, прежде чем идти на `autodiscover.<домен>` — 404 там (ответ вашего обычного веб-сайта) — это ожидаемо и не является ошибкой; значение имеет только этап `autodiscover.<домен>`.
 
 ## Диагностика
 

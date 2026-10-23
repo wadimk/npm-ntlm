@@ -205,6 +205,23 @@ Get-OwaVirtualDirectory -Server "EXCH01" | fl server,*auth*
 Get-EcpVirtualDirectory -Server "EXCH01" | fl server,*auth*
 ```
 
+### Verifying via Autodiscover
+
+The most informative end-to-end check of the Exchange-side URLs is an authenticated Autodiscover POST from outside (NTLM username = **UPN** `user@office.example.com` or `DOMAIN\user` — it may differ from the mailbox's SMTP address; the SMTP address goes only into `EMailAddress` inside the XML):
+
+```bash
+printf '%s' '<?xml version="1.0" encoding="utf-8"?><Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006"><Request><EMailAddress>user@example.com</EMailAddress><AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema></Request></Autodiscover>' > /tmp/autod.xml
+
+curl -s --ntlm -u 'DOMAIN\user' -H 'Content-Type: text/xml' \
+  --data @/tmp/autod.xml https://autodiscover.example.com/Autodiscover/Autodiscover.xml
+```
+
+Expected: `200 OK` with a `<Response>` containing the user's `<Account>` and `<Protocol>` blocks. What to check:
+
+- `EXPR → <Server>` must be the **public** FQDN (`owa.example.com`). If it shows the internal FQDN, `Set-OutlookAnywhere -ExternalHostname` was not applied — external Outlook will fail to connect. Re-run the cmdlet, `iisreset /noforce`, re-test.
+- `WEB/External → OWAUrl` and `EXPR → OABUrl` must be public URLs; `EXCH → <Server>` being the mailbox GUID (`<guid>@example.com`) is normal for Exchange 2013+.
+- `<ErrorCode>600</ErrorCode>` ("Invalid Request") means the XML payload itself is broken (e.g. line wraps inside `EMailAddress` from copy-paste) — authentication has already passed at that point.
+
 ## Testing
 
 - `https://owa.example.com/owa` — the Microsoft 365 sign-in page (with HMA), not an NTLM prompt and not the OWA form.
@@ -220,7 +237,8 @@ curl -v --ntlm -u 'user@example.com:PASSWORD' \
   https://autodiscover.example.com/Autodiscover/Autodiscover.xml -o /dev/null
 ```
 
-- In the Microsoft Connectivity Analyzer use the full UPN (`user@example.com`) as the username. If it reports "failed to obtain an Autodiscover XML response" with a 401, first re-check the credentials — and while re-running the test, watch the NTLM handshakes in `ntlm_access.log` (see "NTLM logging" below): 401 → 401 → 200/400 means the handshake works, silence or a stall after the first 401 means it does not.
+- In the Microsoft Connectivity Analyzer, the **User Name** field takes the UPN (`user@office.example.com`) or `DOMAIN\user` — it can differ from the mailbox's SMTP address, which goes into the **Email Address** field. If it reports "failed to obtain an Autodiscover XML response" with a 401, first re-check the credentials — and while re-running the test, watch the NTLM handshakes in `ntlm_access.log` (see "NTLM logging" below): 401 → 401 → 200/400 means the handshake works, silence or a stall after the first 401 means it does not.
+- RCA always probes `https://<domain>/Autodiscover/...` and `https://www.<domain>/...` before `autodiscover.<domain>` — a 404 there (answered by your regular website) is expected and not a failure; only the `autodiscover.<domain>` stage matters.
 
 ## Troubleshooting
 
