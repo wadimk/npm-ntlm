@@ -185,6 +185,23 @@ Set-OutlookAnywhere -Identity "$server\Rpc (Default Web Site)" `
 
 > With InternalUrl on the internal FQDN, LAN clients talk to Exchange directly — the IIS certificate on Exchange must be valid for the internal name (internal CA or an already trusted one). If you later add **split DNS** (the public name resolving to the NPM host inside the LAN), you can point InternalUrl at the public FQDN as well.
 
+**Extended Protection must be `None`** on every client-facing virtual directory. TLS terminates at NPM, so an EPA-capable client (Windows Schannel: RCA, Windows Outlook) computes the channel binding token from the **proxy's** certificate while Exchange validates it against **its own IIS** certificate → mismatch → 401 after the NTLM Type-3. EPA-incapable clients (curl, Mac Outlook) slip through under `Allow` — a deceptive symptom: "curl works, Windows/RCA does not":
+
+```powershell
+$server = "EXCH01"
+Set-AutodiscoverVirtualDirectory -Identity "$server\Autodiscover (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-WebServicesVirtualDirectory  -Identity "$server\EWS (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-MapiVirtualDirectory         -Identity "$server\mapi (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-ActiveSyncVirtualDirectory   -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OabVirtualDirectory          -Identity "$server\OAB (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OwaVirtualDirectory          -Identity "$server\owa (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-EcpVirtualDirectory          -Identity "$server\ecp (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OutlookAnywhere              -Identity "$server\Rpc (Default Web Site)" -ExtendedProtectionTokenChecking None
+iisreset /noforce
+```
+
+This is not a security downgrade in this topology: EP protects the TLS leg against MITM/relay, and that leg terminates at the proxy.
+
 If you run a hybrid configuration with Microsoft 365 — switch OWA/ECP to Hybrid Modern Authentication (OAuth), disabling legacy methods:
 
 ```powershell
@@ -263,6 +280,7 @@ curl -v --ntlm -u 'user@example.com:PASSWORD' \
 - **`host not found in upstream "exch_ntlm"` when saving a Proxy Host** — `/data/nginx/custom/http_top.conf` is missing or not rendered: check that `EXCHANGE_FQDN` is set and restart the container (the entrypoint restores the template from the image into the volume if it is missing). If the variable is set but rendering was skipped, the entrypoint logs a warning.
 - **UI stuck on "The API is not healthy" after a clean start** — first boot migrations take a minute or two; if it persists, check the container log: when the last lines are `Fetching IP Ranges from online services...`, outbound HTTPS to amazonaws.com/cloudflare.com is hanging (firewall) and the backend does not start listening. Disable the fetch with `IP_RANGES_FETCH_ENABLED=false` (it only feeds Access Lists with AWS/Cloudflare ranges — useless for Exchange).
 - **Outlook cannot connect / loops on the password prompt, while `curl --ntlm` succeeds** — HTTP/2 is enabled on the Proxy Host: NTLM is connection-oriented and breaks over h2 (curl downgrades to HTTP/1.1 on its own, WinHTTP does not). Fix: host edit → uncheck **HTTP/2 Support** → Save (the seeder creates new hosts with it already off).
+- **401 after a fully completed NTLM handshake (curl and Mac Outlook work, RCA / Windows Outlook get 401)** — Extended Protection on the Exchange virtual directories is not `None`: TLS terminates at the proxy, so the channel binding token the client computes (from the LE certificate) never matches the IIS certificate. Fix: `ExtendedProtectionTokenChecking None` on all client-facing vdirs — see "Exchange 2019 configuration".
 - **Connection refused on all ports (even the UI)** — `EXCHANGE_FQDN` does not resolve from inside the container: nginx fails at startup with `host not found in upstream "<fqdn>:443"` and never starts. Fix DNS for the Exchange FQDN (or use an IP) and restart.
 
 ### NTLM logging

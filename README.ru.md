@@ -185,6 +185,23 @@ Set-OutlookAnywhere -Identity "$server\Rpc (Default Web Site)" `
 
 > При InternalUrl на внутренний FQDN клиенты из LAN ходят на Exchange напрямую — IIS-сертификат Exchange должен быть валиден для внутреннего имени (внутренний CA или уже доверенный). Если позже появится **split-DNS** (публичное имя внутри LAN резолвится на хост NPM), InternalUrl можно тоже перевести на публичный FQDN.
 
+**Extended Protection должна быть `None`** на всех клиентских виртуальных каталогах. TLS терминируется на NPM, поэтому EPA-совместимый клиент (Windows Schannel: RCA, Windows Outlook) считает channel binding token от сертификата **прокси**, а Exchange проверяет его против **своего** IIS-сертификата → несовпадение → 401 после NTLM Type-3. Клиенты без EPA (curl, Mac Outlook) при `Allow` проскальзывают — обманчивый симптом: «curl работает, а Windows/RCA — нет»:
+
+```powershell
+$server = "EXCH01"
+Set-AutodiscoverVirtualDirectory -Identity "$server\Autodiscover (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-WebServicesVirtualDirectory  -Identity "$server\EWS (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-MapiVirtualDirectory         -Identity "$server\mapi (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-ActiveSyncVirtualDirectory   -Identity "$server\Microsoft-Server-ActiveSync (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OabVirtualDirectory          -Identity "$server\OAB (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OwaVirtualDirectory          -Identity "$server\owa (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-EcpVirtualDirectory          -Identity "$server\ecp (Default Web Site)" -ExtendedProtectionTokenChecking None
+Set-OutlookAnywhere              -Identity "$server\Rpc (Default Web Site)" -ExtendedProtectionTokenChecking None
+iisreset /noforce
+```
+
+Это не ослабление безопасности в данной топологии: EP защищает TLS-ногу от MITM/relay, а эта нога терминируется на прокси.
+
 Если включена гибридная конфигурация с Microsoft 365 — перевести OWA/ECP на Hybrid Modern Authentication (OAuth), отключив legacy-методы:
 
 ```powershell
@@ -263,6 +280,7 @@ curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
 - **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что задан `EXCHANGE_FQDN`, и перезапустите контейнер (entrypoint сам восстановит шаблон из образа в том, если его там нет). Если переменная задана, а рендеринг пропущен, entrypoint пишет предупреждение в лог.
 - **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
 - **Outlook не подключается / крутит запрос пароля, хотя `curl --ntlm` работает** — на Proxy Host включён HTTP/2: NTLM привязан к TCP-соединению и поверх h2 ломается (curl сам скидывается на HTTP/1.1, WinHTTP — нет). Лечение: правка хоста → снять галку **HTTP/2 Support** → Save (сидер создаёт новые хосты уже с выключенным h2).
+- **401 после полностью завершённого NTLM-рукопожатия (curl и Mac Outlook работают, RCA / Windows Outlook получают 401)** — Extended Protection на каталогах Exchange не `None`: TLS терминируется на прокси, поэтому channel binding token клиента (от сертификата LE) никогда не совпадёт с IIS-сертификатом. Лечение: `ExtendedProtectionTokenChecking None` на всех клиентских vdir — см. «Настройка на стороне Exchange 2019».
 - **Connection refused на всех портах (даже UI не открывается)** — `EXCHANGE_FQDN` не резолвится из контейнера: nginx падает при старте с `host not found in upstream "<fqdn>:443"` и вообще не запускается. Почините DNS для FQDN Exchange (или используйте IP) и перезапустите.
 
 ### Логирование NTLM
