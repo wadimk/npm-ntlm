@@ -70,7 +70,9 @@ RESPONSE=$(jq -n \
 		access_list_id: 0,
 		certificate_id: 0,
 		ssl_forced: false,
-		http2_support: true,
+		# HTTP/2 выключен намеренно: NTLM привязан к TCP-соединению, поверх h2
+		# рукопожатие ломается (curl скидывается на http/1.1, WinHTTP/Outlook — нет).
+		http2_support: false,
 		hsts_enabled: false,
 		hsts_subdomains: false,
 		meta: { letsencrypt_agree: false, dns_challenge: false },

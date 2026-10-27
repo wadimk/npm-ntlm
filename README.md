@@ -70,6 +70,7 @@ envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 ### What the seeded config includes
 
 - `/` redirects (302) to `/owa`; `/healthz` returns `200 ok` for monitoring;
+- **HTTP/2 is disabled** on the created Proxy Host: NTLM is connection-oriented and breaks over h2 (curl silently downgrades to HTTP/1.1, WinHTTP/Outlook does not — symptom: Outlook cannot connect / loops on the password prompt while `curl --ntlm` works);
 - **`/powershell` and `/ecp` return 403** — Remote PowerShell and the Exchange admin panel are not exposed to the internet. To open ECP (e.g. restricted to your IPs), edit the Advanced config per the comment inside the template;
 - every NTLM location logs handshakes to `/var/log/nginx/ntlm_access.log` (see "NTLM logging" below).
 
@@ -261,6 +262,7 @@ curl -v --ntlm -u 'user@example.com:PASSWORD' \
 - **Browser NTLM prompt for OWA/ECP** — HMA is not enabled.
 - **`host not found in upstream "exch_ntlm"` when saving a Proxy Host** — `/data/nginx/custom/http_top.conf` is missing or not rendered: check that `EXCHANGE_FQDN` is set and restart the container (the entrypoint restores the template from the image into the volume if it is missing). If the variable is set but rendering was skipped, the entrypoint logs a warning.
 - **UI stuck on "The API is not healthy" after a clean start** — first boot migrations take a minute or two; if it persists, check the container log: when the last lines are `Fetching IP Ranges from online services...`, outbound HTTPS to amazonaws.com/cloudflare.com is hanging (firewall) and the backend does not start listening. Disable the fetch with `IP_RANGES_FETCH_ENABLED=false` (it only feeds Access Lists with AWS/Cloudflare ranges — useless for Exchange).
+- **Outlook cannot connect / loops on the password prompt, while `curl --ntlm` succeeds** — HTTP/2 is enabled on the Proxy Host: NTLM is connection-oriented and breaks over h2 (curl downgrades to HTTP/1.1 on its own, WinHTTP does not). Fix: host edit → uncheck **HTTP/2 Support** → Save (the seeder creates new hosts with it already off).
 - **Connection refused on all ports (even the UI)** — `EXCHANGE_FQDN` does not resolve from inside the container: nginx fails at startup with `host not found in upstream "<fqdn>:443"` and never starts. Fix DNS for the Exchange FQDN (or use an IP) and restart.
 
 ### NTLM logging

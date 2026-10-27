@@ -70,6 +70,7 @@ envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 ### Что входит в создаваемый конфиг
 
 - `/` редиректит (302) на `/owa`; `/healthz` отдаёт `200 ok` для мониторинга;
+- **HTTP/2 выключен** на создаваемом Proxy Host: NTLM привязан к TCP-соединению и поверх h2 ломается (curl молча скидывается на HTTP/1.1, WinHTTP/Outlook — нет; симптом: Outlook не подключается / крутит запрос пароля, хотя `curl --ntlm` работает);
 - **`/powershell` и `/ecp` возвращают 403** — Remote PowerShell и админка Exchange не выставлены в интернет. Чтобы открыть ECP (например, только для своих IP), отредактируйте Advanced-конфиг по комментарию в шаблоне;
 - каждая NTLM-локация пишет рукопожатия в `/var/log/nginx/ntlm_access.log` (см. «Логирование NTLM» ниже).
 
@@ -261,6 +262,7 @@ curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
 - **NTLM-диалог в браузере для OWA/ECP** — не включена HMA.
 - **`host not found in upstream "exch_ntlm"` при сохранении Proxy Host** — отсутствует или не отрендерился `/data/nginx/custom/http_top.conf`: проверьте, что задан `EXCHANGE_FQDN`, и перезапустите контейнер (entrypoint сам восстановит шаблон из образа в том, если его там нет). Если переменная задана, а рендеринг пропущен, entrypoint пишет предупреждение в лог.
 - **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
+- **Outlook не подключается / крутит запрос пароля, хотя `curl --ntlm` работает** — на Proxy Host включён HTTP/2: NTLM привязан к TCP-соединению и поверх h2 ломается (curl сам скидывается на HTTP/1.1, WinHTTP — нет). Лечение: правка хоста → снять галку **HTTP/2 Support** → Save (сидер создаёт новые хосты уже с выключенным h2).
 - **Connection refused на всех портах (даже UI не открывается)** — `EXCHANGE_FQDN` не резолвится из контейнера: nginx падает при старте с `host not found in upstream "<fqdn>:443"` и вообще не запускается. Почините DNS для FQDN Exchange (или используйте IP) и перезапустите.
 
 ### Логирование NTLM
