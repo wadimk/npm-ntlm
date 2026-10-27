@@ -18,7 +18,17 @@ upstream exch_ntlm {
 # Используется NTLM location-блоками в Advanced-конфиге Proxy Host
 # (access_log ... ntlm_log). Чтобы выключить — закомментируйте access_log
 # и error_log в location-блоках.
+#
+# Логируем ТОЛЬКО схему аутентификации (NTLM/Basic/Bearer/Negotiate),
+# сам заголовок не пишем: Basic — это base64 от «логин:пароль»,
+# а NTLM-токены позволяют replay-анализ. Для глубокой отладки можно
+# временно заменить $auth_scheme на $http_authorization (пароли в логе!).
+map $http_authorization $auth_scheme {
+    default             "-";
+    "~^(?<scheme>\S+)"  $scheme;
+}
+
 log_format ntlm_log '$remote_addr - $remote_user [$time_local] '
                     '"$request" $status $body_bytes_sent '
                     '"$http_user_agent" '
-                    'NTLM="$http_authorization"';
+                    'auth="$auth_scheme"';

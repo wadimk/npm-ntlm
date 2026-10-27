@@ -285,7 +285,7 @@ curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
 
 ### Логирование NTLM
 
-Логирование NTLM-рукопожатий включено из коробки: `log_format ntlm_log` объявлен в шаблоне upstream'а, а каждый NTLM location-блок в `advanced-custom-nginx.conf.template` пишет в `/var/log/nginx/ntlm_access.log` (ошибки — в `/var/log/nginx/ntlm_error.log`). Смотреть рукопожатия:
+Логирование NTLM-рукопожатий включено из коробки: `log_format ntlm_log` объявлен в шаблоне upstream'а, а каждый NTLM location-блок в `advanced-custom-nginx.conf.template` пишет в `/var/log/nginx/ntlm_access.log` (ошибки — в `/var/log/nginx/ntlm_error.log`). В лог пишется только **схема** аутентификации (`auth="NTLM|Basic|Negotiate|Bearer"`), сам заголовок `Authorization` не логируется: Basic — это обратимый base64 логина и пароля (для глубокой отладки можно временно заменить `$auth_scheme` на `$http_authorization` в шаблоне — тогда лог считать секретом). Смотреть рукопожатия:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log

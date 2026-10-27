@@ -285,7 +285,7 @@ curl -v --ntlm -u 'user@example.com:PASSWORD' \
 
 ### NTLM logging
 
-NTLM handshake logging is enabled out of the box: `log_format ntlm_log` is defined in the upstream template, and every NTLM location block in `advanced-custom-nginx.conf.template` writes to `/var/log/nginx/ntlm_access.log` (errors go to `/var/log/nginx/ntlm_error.log`). Watch the handshakes:
+NTLM handshake logging is enabled out of the box: `log_format ntlm_log` is defined in the upstream template, and every NTLM location block in `advanced-custom-nginx.conf.template` writes to `/var/log/nginx/ntlm_access.log` (errors go to `/var/log/nginx/ntlm_error.log`). The log records only the **auth scheme** (`auth="NTLM|Basic|Negotiate|Bearer"`) — never the `Authorization` header itself: Basic credentials are reversible base64 and must not end up in logs (for deep debugging you can temporarily switch `$auth_scheme` to `$http_authorization` in the template — treat the log as a secret then). Watch the handshakes:
 
 ```bash
 docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
