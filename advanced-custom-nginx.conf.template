@@ -128,18 +128,20 @@ location /rpc {
 }
 
 # ActiveSync
-# EAS штатно работает по Basic поверх HTTPS — NTLM-модуль ему не нужен.
-# Через exch_ntlm наблюдались 502 без записей в error-логах: внутренний
-# путь отказа модуля на сценарии «401 -> пауза ~20с -> повтор с Basic»
-# (упиралось в proxy_connect_timeout). Поэтому проксируем напрямую.
-# NB: редкие NTLM-only EAS-клиенты (например, старый Windows Mail)
-# через прокси работать не смогут — Basic/Digest только.
+# NB: какое-то время эта локация проксировалась напрямую (минуя exch_ntlm)
+# из-за 502 на RCA FolderSync — расследование показало, что модуль был
+# невиновен: Exchange выполнял FolderSync ~20 с (отключённое наследование
+# разрешений на учётке в AD, событие MSExchange ActiveSync), и запрос
+# отсекался по таймауту. При медленном Exchange проверяйте IIS-лог
+# (time-taken) и AD-права пользователя, а не модуль.
 location /Microsoft-Server-ActiveSync {
+  proxy_http_version 1.1;
+  proxy_set_header Connection "";
   proxy_set_header Host $host;
   proxy_set_header Authorization $http_authorization;
 
   proxy_ssl_name ${EXCHANGE_FQDN};
-  proxy_pass https://${EXCHANGE_FQDN};
+  proxy_pass https://exch_ntlm;
 
   access_log /var/log/nginx/ntlm_access.log ntlm_log;
   error_log  /var/log/nginx/ntlm_error.log warn;
