@@ -72,6 +72,7 @@ envsubst '${EXCHANGE_FQDN} ${OWA_FQDN}' < advanced-custom-nginx.conf.template
 - `/` редиректит (302) на `/owa`; `/healthz` отдаёт `200 ok` для мониторинга;
 - **HTTP/2 выключен** на создаваемом Proxy Host: NTLM привязан к TCP-соединению и поверх h2 ломается (curl молча скидывается на HTTP/1.1, WinHTTP/Outlook — нет; симптом: Outlook не подключается / крутит запрос пароля, хотя `curl --ntlm` работает);
 - **`/powershell` и `/ecp` возвращают 403** — Remote PowerShell и админка Exchange не выставлены в интернет. Чтобы открыть ECP (например, только для своих IP), отредактируйте Advanced-конфиг по комментарию в шаблоне;
+- **ActiveSync проксируется напрямую** (минуя upstream `exch_ntlm`): EAS работает по Basic поверх HTTPS, а очередь соединений NTLM-модуля давала 502 на паттерне «401 → отложенный повтор с Basic». Цена: редкие NTLM-only EAS-клиенты (например, старый Windows Mail) через прокси не аутентифицируются;
 - каждая NTLM-локация пишет рукопожатия в `/var/log/nginx/ntlm_access.log` (см. «Логирование NTLM» ниже).
 
 ### Жизненный цикл сидера (что меняется при рестартах)
@@ -281,6 +282,7 @@ curl -v --ntlm -u 'user@example.com:ПАРОЛЬ' \
 - **UI завис на "The API is not healthy" после чистого запуска** — миграции первого запуска занимают минуту-две; если дольше, смотрите лог контейнера: когда последние строки — `Fetching IP Ranges from online services...`, исходящий HTTPS до amazonaws.com/cloudflare.com висит (файрвол) и backend не начинает слушать порт. Отключите выгрузку переменной `IP_RANGES_FETCH_ENABLED=false` (она нужна только для Access Lists по диапазонам AWS/Cloudflare — для Exchange бесполезна).
 - **Outlook не подключается / крутит запрос пароля, хотя `curl --ntlm` работает** — на Proxy Host включён HTTP/2: NTLM привязан к TCP-соединению и поверх h2 ломается (curl сам скидывается на HTTP/1.1, WinHTTP — нет). Лечение: правка хоста → снять галку **HTTP/2 Support** → Save (сидер создаёт новые хосты уже с выключенным h2).
 - **401 после полностью завершённого NTLM-рукопожатия (curl и Mac Outlook работают, RCA / Windows Outlook получают 401)** — Extended Protection на каталогах Exchange не `None`: TLS терминируется на прокси, поэтому channel binding token клиента (от сертификата LE) никогда не совпадёт с IIS-сертификатом. Лечение: `ExtendedProtectionTokenChecking None` на всех клиентских vdir — см. «Настройка на стороне Exchange 2019».
+- **502 на ActiveSync FolderSync через ~20с после повтора с авторизацией, при пустых error-логах** — внутренний отказ очереди соединений NTLM-модуля на паттерне «401 → отложенный повтор с Basic». Исправлено в шаблоне: `/Microsoft-Server-ActiveSync` проксируется напрямую (EAS — Basic-only). Применить — обновить Advanced-конфиг хоста.
 - **Connection refused на всех портах (даже UI не открывается)** — `EXCHANGE_FQDN` не резолвится из контейнера: nginx падает при старте с `host not found in upstream "<fqdn>:443"` и вообще не запускается. Почините DNS для FQDN Exchange (или используйте IP) и перезапустите.
 
 ### Логирование NTLM
