@@ -102,9 +102,11 @@ echo | openssl s_client -connect owa.example.com:443 -servername owa.example.com
 Versions are set as arguments at the top of the `Dockerfile`:
 
 - `NPM_IMAGE` — official NPM image tag (currently `jc21/nginx-proxy-manager:2.16.0`);
-- `OPENRESTY_VERSION` — OpenResty version from the [nginx-full](https://github.com/NginxProxyManager/docker-nginx-full/blob/master/docker/docker-bake.hcl) base image (currently `1.31.1.1`); it must match the one inside the NPM image — check with `docker run --rm jc21/nginx-proxy-manager:<tag> nginx -v`.
+- `OPENRESTY_VERSION` — OpenResty version from the [nginx-full](https://github.com/NginxProxyManager/docker-nginx-full/blob/master/docker/docker-bake.hcl) base image (currently `1.31.1.1`); it must match the one inside the NPM image — check with `docker run --rm --entrypoint nginx jc21/nginx-proxy-manager:<tag> -v`.
 
 After changing: `docker compose build --no-cache && docker compose up -d`.
+
+Both parts of the update are automated (see "Docker Hub via GitHub Actions"): a monthly scheduled rebuild picks up fresh base-image layers and OS patches (`apt-get upgrade` runs in the final stage of the `Dockerfile`), and the `version-check` workflow opens a PR with the ARG bump when a new NPM release comes out — the PR body tells you what to review before merging.
 
 ## Publishing to a registry
 
@@ -119,6 +121,10 @@ Note: on Apple Silicon the amd64 build runs under QEMU emulation and takes much 
 ### Docker Hub via GitHub Actions
 
 On every push to `main` the workflow `.github/workflows/docker-publish.yml` builds both platforms and pushes `vkosin/npm-ntlm:latest` to Docker Hub — no local build needed. One-time setup: add repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (access token: hub.docker.com → Account Settings → Security).
+
+The same workflow also runs on a **monthly schedule** (picks up fresh base-image layers and OS patches via `apt-get upgrade` in the `Dockerfile`) and on **pull requests** (build only, no push).
+
+Separately, `.github/workflows/version-check.yml` checks monthly for new [NPM releases](https://github.com/NginxProxyManager/nginx-proxy-manager/releases): when one appears, it detects the OpenResty version inside the new image (`nginx -v`), bumps both ARGs in the `Dockerfile` and opens a pull request. GitHub does not run workflows on PRs created by `GITHUB_TOKEN`, so for automatic PR builds add a `PAT_TOKEN` repository secret (classic PAT, scopes `repo` + `workflow`) — otherwise trigger the build manually: close/reopen the PR or push to its branch.
 
 ## Running
 

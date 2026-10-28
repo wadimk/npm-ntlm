@@ -47,7 +47,14 @@ Test-ExchangeProxy.ps1          — PowerShell-скрипт сквозной в�
 README.ru.md                    — русская версия README.md
 .github/workflows/docker-publish.yml — CI: мультиплатформенная сборка и пуш
                                   vkosin/npm-ntlm:latest в Docker Hub при пуше в main
-                                  (секреты DOCKERHUB_USERNAME / DOCKERHUB_TOKEN)
+                                  (секреты DOCKERHUB_USERNAME / DOCKERHUB_TOKEN);
+                                  плюс ежемесячная плановая пересборка (cron) — подтягивает
+                                  свежие слои базового образа и патчи ОС (apt-get upgrade
+                                  в финальной стадии Dockerfile); на PR — сборка без пуша
+.github/workflows/version-check.yml — ежемесячно проверяет релизы NPM; при новом
+                                  определяет OpenResty через nginx -v в новом образе,
+                                  поднимает оба ARG в Dockerfile и открывает PR
+                                  (для автосборки таких PR нужен секрет PAT_TOKEN)
 ```
 
 Нет исходного кода приложения, тестов и менеджеров пакетов — только Dockerfile, конфигурация nginx, Docker Compose и CI-workflow.
@@ -85,7 +92,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   - `${OWA_FQDN}` — публичный FQDN OWA/ECP в `advanced-custom-nginx.conf.template`; подставляется сидером из env `OWA_FQDN` либо вручную;
   - `autodiscover.example.com` — публичный FQDN Autodiscover (только в примерах документации; реальное значение — env `AUTODISCOVER_FQDN`, необязательна: если пуста, Proxy Host создаётся только с `OWA_FQDN`).
 - Сидер (`seed-proxy-host.sh`) работает через API NPM на `http://127.0.0.1:81/api` (на порт 3000 backend не отвечает). Payload создания Proxy Host строго по схеме NPM 2.16: лишние поля (например, `custom_ssl_redirect`) API отвергает с "must NOT have additional properties". Сертификат LE и Force SSL сидер НЕ запрашивает — это ручной шаг в UI. Сидер create-only: существующий хост (проверка по `OWA_FQDN`) никогда не обновляет — изменение env после сидирования применяется только удалением хоста в UI и рестартом контейнера. Пустой `AUTODISCOVER_FQDN` означает «без autodiscover» (домен не добавляется).
-- При обновлении версии NPM в `Dockerfile` (ARG `NPM_IMAGE`) обязательно сверять ARG `OPENRESTY_VERSION` с версией OpenResty внутри нового образа (`docker run --rm jc21/nginx-proxy-manager:<тег> nginx -v`) — модуль собирается под конкретную версию, при рассинхроне nginx не загрузит .so.
+- При обновлении версии NPM в `Dockerfile` (ARG `NPM_IMAGE`) обязательно сверять ARG `OPENRESTY_VERSION` с версией OpenResty внутри нового образа (`docker run --rm --entrypoint nginx jc21/nginx-proxy-manager:<тег> -v`) — модуль собирается под конкретную версию, при рассинхроне nginx не загрузит .so. Обычно это делает workflow `version-check.yml` (PR с поднятием обоих ARG); ручное обновление — тоже по этой схеме. `apt-get upgrade` в финальной стадии `Dockerfile` не удалять — на него завязана ежемесячная плановая пересборка образа.
 - `http_top.conf.template` и `advanced-custom-nginx.conf.template` связаны: location-блоки в Advanced-конфиге проксируют на upstream `exch_ntlm`, объявленный в шаблоне. Изменения должны оставаться согласованными.
 - Все Exchange-локации в Advanced-шаблоне — регистронезависимые regex (`location ~* ^/ews/` и т.д.), и это обязательно сохранять: IIS-пути case-insensitive, клиенты используют регистр из URL виртуальных каталогов (`/EWS/`, `/OAB/` — в верхнем). С префиксными локациями такие запросы обходили NTLM-привязку и Type-3 уходил по другому соединению — `SEC_E_INVALID_TOKEN`.
 - Публикация образа в registry — только мультиплатформенной сборкой (`linux/amd64` + `linux/arm64`) через `docker buildx build --push`; одноархитектурный образ в registry не пушить. Учитывать, что на Apple Silicon сборка amd64 идёт через QEMU и существенно дольше нативной.

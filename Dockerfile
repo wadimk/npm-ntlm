@@ -111,8 +111,11 @@ COPY --from=ntlm-builder /ngx_http_upstream_ntlm_module.so /usr/lib/nginx/module
 RUN mkdir -p /etc/nginx/modules \
 	&& echo 'load_module /usr/lib/nginx/modules/ngx_http_upstream_ntlm_module.so;' > /etc/nginx/modules/ntlm.conf
 
-# Обёртка entrypoint: рендерит шаблоны конфигов (envsubst) перед запуском /init
+# Обёртка entrypoint: рендерит шаблоны конфигов (envsubst) перед запуском /init.
+# apt-get upgrade подтягивает патчи ОС базового образа — смысл плановых
+# пересборок CI (cron в docker-publish.yml) именно в этом
 RUN apt-get update \
+	&& apt-get upgrade -y --no-install-recommends \
 	&& apt-get install -y --no-install-recommends gettext-base \
 	&& apt-get clean \
 	&& rm -rf /var/lib/apt/lists/*

@@ -1,0 +1,76 @@
+name: version-check
+
+# Раз в месяц проверяет свежие релизы Nginx Proxy Manager. Если вышла новая
+# версия — определяет версию OpenResty внутри нового образа (nginx -v),
+# обновляет ARG в Dockerfile и открывает PR. Дальше PR собирается
+# docker-publish.yml (push в registry произойдёт после мерджа в main).
+#
+# Внимание: GitHub не запускает workflow на PR, созданные от GITHUB_TOKEN.
+# Для автоматической сборки таких PR добавьте секрет PAT_TOKEN
+# (classic PAT со scope repo + workflow); без него PR создастся, но сборку
+# нужно стартовать вручную — закрыть/переоткрыть PR или запушить в его ветку.
+
+on:
+  schedule:
+    - cron: '23 4 2 * *'   # ежемесячно, 2-го числа, 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for a new NPM release and bump ARGs
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          CURRENT=$(grep -oP 'ARG NPM_IMAGE=jc21/nginx-proxy-manager:\K\S+' Dockerfile)
+          LATEST=$(gh api repos/NginxProxyManager/nginx-proxy-manager/releases/latest --jq '.tag_name' | sed 's/^v//')
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" = "$LATEST" ]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "NPM $CURRENT — уже свежая версия, обновление не требуется"
+            exit 0
+          fi
+          echo "Вышла новая версия NPM: $CURRENT -> $LATEST"
+          echo "Определяю версию OpenResty внутри нового образа"
+          docker pull "jc21/nginx-proxy-manager:$LATEST"
+          ORV=$(docker run --rm --entrypoint nginx "jc21/nginx-proxy-manager:$LATEST" -v 2>&1 \
+                | grep -oP 'openresty/\K[0-9.]+')
+          if [ -z "$ORV" ]; then
+            echo "::error::Не удалось определить версию OpenResty в образе jc21/nginx-proxy-manager:$LATEST"
+            exit 1
+          fi
+          echo "openresty=$ORV" >> "$GITHUB_OUTPUT"
+          echo "update=true" >> "$GITHUB_OUTPUT"
+          sed -i "s|ARG NPM_IMAGE=jc21/nginx-proxy-manager:.*|ARG NPM_IMAGE=jc21/nginx-proxy-manager:$LATEST|" Dockerfile
+          sed -i "s|ARG OPENRESTY_VERSION=.*|ARG OPENRESTY_VERSION=$ORV|" Dockerfile
+
+      - name: Open PR with the version bump
+        if: steps.check.outputs.update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: update/npm-${{ steps.check.outputs.latest }}
+          delete-branch: true
+          commit-message: "chore: NPM ${{ steps.check.outputs.current }} -> ${{ steps.check.outputs.latest }}, OpenResty ${{ steps.check.outputs.openresty }}"
+          title: "Update NPM to ${{ steps.check.outputs.latest }} (OpenResty ${{ steps.check.outputs.openresty }})"
+          body: |
+            Автоматическое обновление версий в `Dockerfile` (workflow `version-check`):
+
+            - `NPM_IMAGE`: `${{ steps.check.outputs.current }}` → `${{ steps.check.outputs.latest }}`
+            - `OPENRESTY_VERSION`: `${{ steps.check.outputs.openresty }}` (определена по `nginx -v` внутри нового образа)
+
+            Перед мерджем:
+            1. Посмотрите [changelog NPM](https://github.com/NginxProxyManager/nginx-proxy-manager/releases).
+            2. Дождитесь зелёной сборки PR (docker-publish собирает PR без пуша).
+            3. После мерджа в `main` образ автоматически уйдёт в Docker Hub.
