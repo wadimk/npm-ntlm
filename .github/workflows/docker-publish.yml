@@ -1,23 +1,23 @@
 name: docker-publish
 
-# Мультиплатформенная сборка и публикация образа в Docker Hub.
-# Требуются секреты репозитория: DOCKERHUB_USERNAME и DOCKERHUB_TOKEN
+# Multi-platform build and publish of the image to Docker Hub.
+# Required repository secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN
 # (access token: hub.docker.com -> Account Settings -> Security).
 
 on:
   push:
     branches: [main]
     tags: ['v*']
-  # Сборка PR без пуша — проверка, что Dockerfile собирается
+  # Build PRs without pushing — verify the Dockerfile still builds
   pull_request:
     branches: [main]
-  # Плановая пересборка раз в месяц (UTC): подтягивает свежие слои базового
-  # образа и патчи ОС (apt-get upgrade в финальной стадии Dockerfile)
+  # Scheduled monthly rebuild (UTC): picks up fresh base-image layers
+  # and OS patches (apt-get upgrade in the final Dockerfile stage)
   schedule:
     - cron: '37 5 2 * *'
   workflow_dispatch:
 
-# contents: write — шаг релиза создаёт git-тег и GitHub Release
+# contents: write — the release step creates a git tag and a GitHub Release
 permissions:
   contents: write
 
@@ -31,8 +31,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Версии берём из ARG Dockerfile — единственный источник правды
-      # (их же поднимает version-check.yml в своих PR)
+      # Versions come from the Dockerfile ARGs — the single source of truth
+      # (the same ARGs that version-check.yml bumps in its PRs)
       - name: Extract versions from Dockerfile
         id: ver
         run: |
@@ -59,21 +59,21 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          # из PR только проверяем сборку, в registry не пушим
+          # PRs only verify the build, nothing is pushed to the registry
           push: ${{ github.event_name != 'pull_request' }}
-          # Версионный тег мутабельный: ежемесячная плановая пересборка
-          # обновляет его вместе с latest (патчи ОС)
+          # The version tag is mutable: the monthly scheduled rebuild
+          # refreshes it together with latest (OS patches)
           tags: |
             ${{ env.IMAGE_NAME }}:latest
             ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.npm }}
-          # кэш слоёв между запусками CI
+          # layer cache between CI runs
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Авто-релиз: при пуше в main, поднявшем ARG NPM_IMAGE (мердж PR от
-      # version-check или ручной бамп), создаём тег v<NPM-версия> и Release.
-      # Созданный от GITHUB_TOKEN тег не триггерит workflow — двойной сборки
-      # от триггера tags: ['v*'] не будет.
+      # Auto-release: when a push to main raises the NPM_IMAGE ARG (a merged
+      # version-check PR or a manual bump), create tag v<NPM version> and a
+      # Release. A tag created by GITHUB_TOKEN does not trigger workflows, so
+      # the tags: ['v*'] trigger will not cause a duplicate build.
       - name: Create GitHub Release for new NPM version
         if: github.event_name == 'push'
         env:
@@ -81,13 +81,13 @@ jobs:
         run: |
           TAG="v${{ steps.ver.outputs.npm }}"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Релиз $TAG уже существует — пропускаю"
+            echo "Release $TAG already exists — skipping"
             exit 0
           fi
           gh release create "$TAG" \
             --title "NPM ${{ steps.ver.outputs.npm }} / OpenResty ${{ steps.ver.outputs.openresty }}" \
-            --notes "NPM ${{ steps.ver.outputs.npm }} (OpenResty ${{ steps.ver.outputs.openresty }}) + NTLM-модуль.
+            --notes "NPM ${{ steps.ver.outputs.npm }} (OpenResty ${{ steps.ver.outputs.openresty }}) + NTLM module.
 
-          Changelog NPM: https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/v${{ steps.ver.outputs.npm }}
+          NPM changelog: https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/v${{ steps.ver.outputs.npm }}
 
           Docker: \`docker pull vkosin/npm-ntlm:${{ steps.ver.outputs.npm }}\`"

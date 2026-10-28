@@ -90,7 +90,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Правила внесения изменений
 
-- Комментарии в конфигах и документация — на русском (английские пометки вроде `# buffering and timeouts` уже встречаются в `advanced-custom-nginx.conf.template` — допустимо, но предпочтителен русский).
+- Комментарии в конфигах и документация — на русском, ИСКЛЮЧЕНИЕ: CI workflow (`.github/workflows/*.yml`) — комментарии и лог-сообщения на английском (текст PR от version-check остаётся на русском — это контент для пользователя, а не комментарий). Английские пометки вроде `# buffering and timeouts` уже встречаются в `advanced-custom-nginx.conf.template` — допустимо, но предпочтителен русский.
 - Конфиги содержат плейсхолдеры — не заменять их конкретными значениями:
   - `${EXCHANGE_FQDN}` — внутренний FQDN Exchange 2019; в `data/nginx/custom/http_top.conf.template` и в `advanced-custom-nginx.conf.template`. Подставляется через env `EXCHANGE_FQDN`: первый рендерит entrypoint при старте, второй — сидер (`seed-proxy-host.sh`) через envsubst либо пользователь вручную перед вставкой в UI;
   - `${OWA_FQDN}` — публичный FQDN OWA/ECP в `advanced-custom-nginx.conf.template`; подставляется сидером из env `OWA_FQDN` либо вручную;

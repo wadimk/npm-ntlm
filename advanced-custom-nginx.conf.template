@@ -1,5 +1,5 @@
 # =========================================================================
-# Шаблон Advanced-конфига Proxy Host для Exchange 2019.
+# Шаблон Advanced-конфига Proxy Host для Exchange.
 #
 # При NPM_SEED_PROXY_HOST=true entrypoint сам рендерит его и создаёт
 # Proxy Host через API NPM (см. seed-proxy-host.sh). Для ручной вставки
@@ -118,12 +118,6 @@ location ~* ^/rpc {
 }
 
 # ActiveSync
-# NB: какое-то время эта локация проксировалась напрямую (минуя exch_ntlm)
-# из-за 502 на RCA FolderSync — расследование показало, что модуль был
-# невиновен: Exchange выполнял FolderSync ~20 с (отключённое наследование
-# разрешений на учётке в AD, событие MSExchange ActiveSync), и запрос
-# отсекался по таймауту. При медленном Exchange проверяйте IIS-лог
-# (time-taken) и AD-права пользователя, а не модуль.
 location ~* ^/microsoft-server-activesync {
   proxy_http_version 1.1;
   proxy_set_header Connection "";

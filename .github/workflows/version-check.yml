@@ -1,18 +1,19 @@
 name: version-check
 
-# Раз в месяц проверяет свежие релизы Nginx Proxy Manager. Если вышла новая
-# версия — определяет версию OpenResty внутри нового образа (nginx -v),
-# обновляет ARG в Dockerfile и открывает PR. Дальше PR собирается
-# docker-publish.yml (push в registry произойдёт после мерджа в main).
+# Checks monthly for new Nginx Proxy Manager releases. When a new version
+# appears, detects the OpenResty version inside the new image (nginx -v),
+# bumps the ARGs in the Dockerfile and opens a PR. The PR is then built by
+# docker-publish.yml (the registry push happens after the merge to main).
 #
-# Внимание: GitHub не запускает workflow на PR, созданные от GITHUB_TOKEN.
-# Для автоматической сборки таких PR добавьте секрет PAT_TOKEN
-# (classic PAT со scope repo + workflow); без него PR создастся, но сборку
-# нужно стартовать вручную — закрыть/переоткрыть PR или запушить в его ветку.
+# Note: GitHub does not run workflows on PRs created by GITHUB_TOKEN.
+# For automatic builds of such PRs add a PAT_TOKEN secret
+# (classic PAT with repo + workflow scope); without it the PR is still
+# created, but the build must be started manually — close/reopen the PR
+# or push to its branch.
 
 on:
   schedule:
-    - cron: '23 4 2 * *'   # ежемесячно, 2-го числа, 04:23 UTC
+    - cron: '23 4 2 * *'   # monthly, on the 2nd, 04:23 UTC
   workflow_dispatch:
 
 permissions:
@@ -38,16 +39,16 @@ jobs:
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           if [ "$CURRENT" = "$LATEST" ]; then
             echo "update=false" >> "$GITHUB_OUTPUT"
-            echo "NPM $CURRENT — уже свежая версия, обновление не требуется"
+            echo "NPM $CURRENT is already the latest version, no update needed"
             exit 0
           fi
-          echo "Вышла новая версия NPM: $CURRENT -> $LATEST"
-          echo "Определяю версию OpenResty внутри нового образа"
+          echo "New NPM release: $CURRENT -> $LATEST"
+          echo "Detecting the OpenResty version inside the new image"
           docker pull "jc21/nginx-proxy-manager:$LATEST"
           ORV=$(docker run --rm --entrypoint nginx "jc21/nginx-proxy-manager:$LATEST" -v 2>&1 \
                 | grep -oP 'openresty/\K[0-9.]+')
           if [ -z "$ORV" ]; then
-            echo "::error::Не удалось определить версию OpenResty в образе jc21/nginx-proxy-manager:$LATEST"
+            echo "::error::Failed to detect the OpenResty version in jc21/nginx-proxy-manager:$LATEST"
             exit 1
           fi
           echo "openresty=$ORV" >> "$GITHUB_OUTPUT"
