@@ -70,22 +70,12 @@ location ~* ^/(autodiscover|Autodiscover|AutoDiscover)/ {
   error_log  /var/log/nginx/ntlm_error.log warn;
 }
 
-# EWS
-location /ews/ {
-  proxy_http_version 1.1;
-  proxy_set_header Connection "";
-  proxy_set_header Host $host;
-  proxy_set_header Authorization $http_authorization;
-
-  proxy_ssl_name ${EXCHANGE_FQDN};
-  proxy_pass https://exch_ntlm;
-
-  access_log /var/log/nginx/ntlm_access.log ntlm_log;
-  error_log  /var/log/nginx/ntlm_error.log warn;
-}
-
-# EWS MRS Proxy
-location = /ews/mrsproxy.svc {
+# EWS (включая mrsproxy.svc)
+# NB: регистронезависимый regex (~*) обязателен — клиенты используют регистр
+# из URL виртуальных каталогов Exchange (/EWS/, /OAB/ — в верхнем), а префиксные
+# location в nginx case-sensitive. С префиксным /ews/ запросы /EWS/ уходили
+# в дефолтный location без NTLM-привязки -> SEC_E_INVALID_TOKEN на Type-3.
+location ~* ^/ews/ {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
@@ -99,7 +89,7 @@ location = /ews/mrsproxy.svc {
 }
 
 # MAPI over HTTP
-location /mapi/ {
+location ~* ^/mapi/ {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
@@ -114,7 +104,7 @@ location /mapi/ {
 }
 
 # Outlook Anywhere RPC
-location /rpc {
+location ~* ^/rpc {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
@@ -134,7 +124,7 @@ location /rpc {
 # разрешений на учётке в AD, событие MSExchange ActiveSync), и запрос
 # отсекался по таймауту. При медленном Exchange проверяйте IIS-лог
 # (time-taken) и AD-права пользователя, а не модуль.
-location /Microsoft-Server-ActiveSync {
+location ~* ^/microsoft-server-activesync {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
@@ -148,7 +138,7 @@ location /Microsoft-Server-ActiveSync {
 }
 
 # OAB
-location /oab {
+location ~* ^/oab {
   proxy_http_version 1.1;
   proxy_set_header Connection "";
   proxy_set_header Host $host;
