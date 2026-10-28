@@ -294,3 +294,61 @@ docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
 ```
 
 To disable, remove the `access_log` / `error_log` lines from the NTLM location blocks in the Proxy Host advanced config.
+
+## Security and monitoring
+
+Exchange behind a public reverse proxy is a high-value target: expect constant password brute force against Basic/NTLM endpoints (OWA, EWS, ActiveSync) and background scanner noise. The fallback server answering 404 to `/phpunit/...` or `/device.rsp` probes on port 80 is normal — what matters is that nothing there ever returns 200.
+
+### Hardening checklist
+
+- **Admin UI (port 81)** must never be published to the internet — restrict it to the LAN/VPN at the firewall. The API is the control plane of the proxy.
+- **`INITIAL_ADMIN_PASSWORD`** — remove from `.env`/compose once the admin exists; rotate any credential that ever appeared in logs or chat (Basic credentials seen in a misconfigured log are base64, i.e. plaintext).
+- **`/powershell` and `/ecp` stay 403** (already in the template). If you open ECP, put an NPM **Access List** (IP allowlist) in front of it.
+- **HSTS** — add to the Proxy Host Advanced config once HTTPS is stable: `add_header Strict-Transport-Security "max-age=63072000" always;`
+- **Rate limiting** on auth endpoints — add a zone to the `http_top.conf` template and reference it in the NTLM locations, e.g. `limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/s;` + `limit_req zone=auth burst=20 nodelay;`.
+- **On Exchange itself**: disable TLS 1.0/1.1 (IIS Crypto or registry), keep up with Exchange CU/SU and Windows updates.
+- **Updates of this image**: rebuild monthly (`docker compose build --no-cache` picks up base-image patches; CI rebuilds on every push to `main`). Watch releases of [jc21/nginx-proxy-manager](https://github.com/NginxProxyManager/nginx-proxy-manager/releases) and bump the `Dockerfile` ARGs.
+- **Certificate expiry**: LE renewal logs are in `/data/logs/letsencrypt*.log`; alert if a certificate has < 14 days left (`openssl s_client -connect owa.example.com:443 -servername owa.example.com 2>/dev/null | openssl x509 -enddate -noout`).
+
+### What to monitor
+
+- **`/var/log/nginx/ntlm_access.log`** — the primary source. Brute force looks like a burst of 401s from one IP; foreign paths are recon. Quick checks:
+
+  ```bash
+  # top IPs by 401 count
+  docker exec -it nginxproxymanager_app_1 sh -c \
+    "grep '\" 401 ' /var/log/nginx/ntlm_access.log | awk '{print \$1}' | sort | uniq -c | sort -rn | head"
+  # requests to non-Exchange paths
+  docker exec -it nginxproxymanager_app_1 sh -c \
+    "grep -v -Ei 'owa|/ews|autodiscover|/mapi|/rpc|activesync|/oab|/ecp|healthz' /var/log/nginx/ntlm_access.log | tail"
+  ```
+
+- **`/data/logs/fallback_*_access.log`** — scanner noise; a 200 here would be a red flag.
+- **IIS logs on Exchange** — every client arrives with the proxy's IP. To keep real client IPs, add the `X-Forwarded-For` field to IIS logging (IIS Manager → Logging → Select Fields) — the proxy already sends the header.
+- **Windows event log** — 4624/4625 (logon success/failure) for mailbox and service accounts, `MSExchange ActiveSync` permission errors, IIS/WAS warnings.
+- **Availability** — the template exposes `/healthz` on the Proxy Host exactly for this: monitor `https://owa.example.com/healthz` from outside (200 = proxy + host config alive) and alert on failure; pair it with a 401-check on `/Microsoft-Server-ActiveSync` (401 with challenge = auth path alive, anything else = trouble).
+
+### Fail2ban on the Docker host
+
+The NTLM log lives inside the container; to feed host-side fail2ban either point the template's log paths at `/data/logs/` (the `./data` volume) — e.g. `access_log /data/logs/ntlm_access.log ntlm_log;` — or mount an extra volume for `/var/log/nginx`. Then:
+
+```ini
+# /etc/fail2ban/filter.d/npm-ntlm.conf
+[Definition]
+failregex = ^<HOST> \S+ \S+ \[[^\]]+\] "[^"]*" 401 .*$
+datepattern = %%d/%%b/%%Y:%%H:%%M:%%S %%z
+```
+
+```ini
+# /etc/fail2ban/jail.d/npm-ntlm.conf
+[npm-ntlm]
+enabled  = true
+filter   = npm-ntlm
+logpath  = /srv/npm/data/logs/ntlm_access.log
+maxretry = 20
+findtime = 3600
+bantime  = 3600
+action   = iptables-multiport[name=npm-ntlm, port="http,https"]
+```
+
+Keep `maxretry` lenient and `findtime` long: an Outlook client with a stale saved password also produces 401 bursts — aggressive banning locks out your own users. An alternative that needs no host setup at all is nginx rate limiting (see above).

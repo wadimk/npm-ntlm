@@ -294,3 +294,61 @@ docker exec -it nginxproxymanager_app_1 tail -f /var/log/nginx/ntlm_access.log
 ```
 
 Чтобы выключить — уберите строки `access_log` / `error_log` из NTLM location-блоков в Advanced-конфиге Proxy Host.
+
+## Безопасность и мониторинг
+
+Exchange за публичным reverse proxy — ценная цель: постоянный брутфорс паролей на Basic/NTLM-эндпоинтах (OWA, EWS, ActiveSync) и фоновый шум сканеров гарантированы. То, что fallback-сервер отвечает 404 на пробы `/phpunit/...` или `/device.rsp` на порту 80 — норма; важно лишь, чтобы там никогда не было 200.
+
+### Чеклист харденинга
+
+- **Админка NPM (порт 81)** никогда не публикуется в интернет — только LAN/VPN на файрволе. API — это пульт управления прокси.
+- **`INITIAL_ADMIN_PASSWORD`** — убрать из `.env`/compose после создания администратора; любые учётные данные, попавшие в логи или переписку, считать скомпрометированными и сменить (Basic в неверно настроенном логе — это base64, то есть открытый текст).
+- **`/powershell` и `/ecp` остаются закрытыми (403)** — уже в шаблоне. Если ECP открываете, поставьте перед ним **Access List** (allowlist по IP) средствами NPM.
+- **HSTS** — после стабилизации HTTPS добавить в Advanced-конфиг хоста: `add_header Strict-Transport-Security "max-age=63072000" always;`
+- **Rate limiting** на auth-эндпоинты — зону добавить в шаблон `http_top.conf`, ссылку — в NTLM-локации: `limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/s;` + `limit_req zone=auth burst=20 nodelay;`.
+- **На самом Exchange**: выключить TLS 1.0/1.1 (IIS Crypto или реестр), своевременно ставить CU/SU Exchange и обновления Windows.
+- **Обновления этого образа**: пересборка раз в месяц (`docker compose build --no-cache` подтянет патчи базового образа; CI пересобирает на каждый пуш в `main`). Следить за релизами [jc21/nginx-proxy-manager](https://github.com/NginxProxyManager/nginx-proxy-manager/releases) и поднимать ARG в `Dockerfile`.
+- **Срок сертификатов**: логи продления LE — `/data/logs/letsencrypt*.log`; алерт, если сертификату осталось < 14 дней (`openssl s_client -connect owa.example.com:443 -servername owa.example.com 2>/dev/null | openssl x509 -enddate -noout`).
+
+### Что мониторить
+
+- **`/var/log/nginx/ntlm_access.log`** — основной источник. Брутфорс выглядит как пачка 401 с одного IP; чужие пути — разведка. Быстрые проверки:
+
+  ```bash
+  # топ IP по количеству 401
+  docker exec -it nginxproxymanager_app_1 sh -c \
+    "grep '\" 401 ' /var/log/nginx/ntlm_access.log | awk '{print \$1}' | sort | uniq -c | sort -rn | head"
+  # запросы к не-Exchange путям
+  docker exec -it nginxproxymanager_app_1 sh -c \
+    "grep -v -Ei 'owa|/ews|autodiscover|/mapi|/rpc|activesync|/oab|/ecp|healthz' /var/log/nginx/ntlm_access.log | tail"
+  ```
+
+- **`/data/logs/fallback_*_access.log`** — шум сканеров; 200 здесь — красный флаг.
+- **IIS-логи на Exchange** — все клиенты приходят с IP прокси. Чтобы видеть реальные адреса, добавьте поле `X-Forwarded-For` в настройки логирования IIS (IIS Manager → Logging → Select Fields) — прокси этот заголовок уже передаёт.
+- **Журнал событий Windows** — 4624/4625 (успех/ошибка входа) по почтовым и сервисным учёткам, ошибки прав `MSExchange ActiveSync`, предупреждения IIS/WAS.
+- **Доступность** — в шаблоне есть `/healthz` именно для этого: мониторьте `https://owa.example.com/healthz` снаружи (200 = прокси и конфиг хоста живы) с алертом на отказ; полезно дополнить проверкой 401 на `/Microsoft-Server-ActiveSync` (401 с challenge = auth-контур жив, всё остальное — беда).
+
+### Fail2ban на Docker-хосте
+
+NTLM-лог живёт внутри контейнера; чтобы скормить его fail2ban на хосте, либо перенаправьте пути логов в шаблоне на `/data/logs/` (том `./data`) — например `access_log /data/logs/ntlm_access.log ntlm_log;` — либо примонтируйте отдельный том на `/var/log/nginx`. Дальше:
+
+```ini
+# /etc/fail2ban/filter.d/npm-ntlm.conf
+[Definition]
+failregex = ^<HOST> \S+ \S+ \[[^\]]+\] "[^"]*" 401 .*$
+datepattern = %%d/%%b/%%Y:%%H:%%M:%%S %%z
+```
+
+```ini
+# /etc/fail2ban/jail.d/npm-ntlm.conf
+[npm-ntlm]
+enabled  = true
+filter   = npm-ntlm
+logpath  = /srv/npm/data/logs/ntlm_access.log
+maxretry = 20
+findtime = 3600
+bantime  = 3600
+action   = iptables-multiport[name=npm-ntlm, port="http,https"]
+```
+
+Держите `maxretry` щадящим, а `findtime` длинным: Outlook с протухшим сохранённым паролем тоже генерирует пачки 401 — агрессивный бан заблокирует собственных пользователей. Альтернатива без настройки на хосте — rate limiting средствами nginx (см. выше).
