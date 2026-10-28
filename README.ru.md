@@ -124,6 +124,8 @@ docker buildx build --platform linux/amd64,linux/arm64 -t registry.example.com/n
 
 Тот же workflow запускается и **по расписанию раз в месяц** (подтягивает свежие слои базового образа и патчи ОС через `apt-get upgrade` в `Dockerfile`), и на **pull request'ах** (только сборка, без пуша).
 
+Образ публикуется с **двумя тегами**: `vkosin/npm-ntlm:latest` и `vkosin/npm-ntlm:<версия NPM>` (например `:2.16.0`) — версионный тег можно запинить в compose для контролируемых обновлений и отката. Учтите: версионный тег мутабельный — ежемесячная пересборка обновляет его вместе с `latest`. А при пуше в `main`, поднявшем ARG `NPM_IMAGE` (мердж PR от `version-check` или ручной бамп), workflow автоматически создаёт git-тег и **GitHub Release** `v<версия NPM>` — ручной шаг с релизом больше не нужен.
+
 Отдельный workflow `.github/workflows/version-check.yml` раз в месяц проверяет свежие [релизы NPM](https://github.com/NginxProxyManager/nginx-proxy-manager/releases): при появлении нового определяет версию OpenResty внутри нового образа (`nginx -v`), поднимает оба ARG в `Dockerfile` и открывает pull request. GitHub не запускает workflow на PR, созданные от `GITHUB_TOKEN`, поэтому для автоматической сборки таких PR добавьте секрет `PAT_TOKEN` (classic PAT, scope `repo` + `workflow`) — либо стартуйте сборку вручную: закрыть/переоткрыть PR или запушить в его ветку.
 
 ## Запуск

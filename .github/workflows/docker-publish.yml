@@ -17,6 +17,10 @@ on:
     - cron: '37 5 2 * *'
   workflow_dispatch:
 
+# contents: write — шаг релиза создаёт git-тег и GitHub Release
+permissions:
+  contents: write
+
 env:
   IMAGE_NAME: vkosin/npm-ntlm
 
@@ -26,6 +30,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Версии берём из ARG Dockerfile — единственный источник правды
+      # (их же поднимает version-check.yml в своих PR)
+      - name: Extract versions from Dockerfile
+        id: ver
+        run: |
+          NPM_VER=$(grep -oP 'ARG NPM_IMAGE=jc21/nginx-proxy-manager:\K\S+' Dockerfile)
+          OR_VER=$(grep -oP '^ARG OPENRESTY_VERSION=\K\S+' Dockerfile)
+          echo "npm=$NPM_VER" >> "$GITHUB_OUTPUT"
+          echo "openresty=$OR_VER" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -47,8 +61,33 @@ jobs:
           platforms: linux/amd64,linux/arm64
           # из PR только проверяем сборку, в registry не пушим
           push: ${{ github.event_name != 'pull_request' }}
+          # Версионный тег мутабельный: ежемесячная плановая пересборка
+          # обновляет его вместе с latest (патчи ОС)
           tags: |
             ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.ver.outputs.npm }}
           # кэш слоёв между запусками CI
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Авто-релиз: при пуше в main, поднявшем ARG NPM_IMAGE (мердж PR от
+      # version-check или ручной бамп), создаём тег v<NPM-версия> и Release.
+      # Созданный от GITHUB_TOKEN тег не триггерит workflow — двойной сборки
+      # от триггера tags: ['v*'] не будет.
+      - name: Create GitHub Release for new NPM version
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ steps.ver.outputs.npm }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Релиз $TAG уже существует — пропускаю"
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "NPM ${{ steps.ver.outputs.npm }} / OpenResty ${{ steps.ver.outputs.openresty }}" \
+            --notes "NPM ${{ steps.ver.outputs.npm }} (OpenResty ${{ steps.ver.outputs.openresty }}) + NTLM-модуль.
+
+          Changelog NPM: https://github.com/NginxProxyManager/nginx-proxy-manager/releases/tag/v${{ steps.ver.outputs.npm }}
+
+          Docker: \`docker pull vkosin/npm-ntlm:${{ steps.ver.outputs.npm }}\`"

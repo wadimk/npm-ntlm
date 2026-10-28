@@ -46,11 +46,15 @@ Test-ExchangeProxy.ps1          — PowerShell-скрипт сквозной в�
                                   /ecp), Autodiscover POST с разбором XML-ответа
 README.ru.md                    — русская версия README.md
 .github/workflows/docker-publish.yml — CI: мультиплатформенная сборка и пуш
-                                  vkosin/npm-ntlm:latest в Docker Hub при пуше в main
-                                  (секреты DOCKERHUB_USERNAME / DOCKERHUB_TOKEN);
-                                  плюс ежемесячная плановая пересборка (cron) — подтягивает
-                                  свежие слои базового образа и патчи ОС (apt-get upgrade
-                                  в финальной стадии Dockerfile); на PR — сборка без пуша
+                                  vkosin/npm-ntlm:latest + :<версия NPM> в Docker Hub
+                                  при пуше в main (секреты DOCKERHUB_USERNAME /
+                                  DOCKERHUB_TOKEN); плюс ежемесячная плановая пересборка
+                                  (cron) — подтягивает свежие слои базового образа и
+                                  патчи ОС (apt-get upgrade в финальной стадии
+                                  Dockerfile); на PR — сборка без пуша; при поднятии
+                                  ARG NPM_IMAGE в main автоматически создаёт тег
+                                  v<версия NPM> и GitHub Release (тег от GITHUB_TOKEN
+                                  не ретриггерит workflow — двойной сборки нет)
 .github/workflows/version-check.yml — ежемесячно проверяет релизы NPM; при новом
                                   определяет OpenResty через nginx -v в новом образе,
                                   поднимает оба ARG в Dockerfile и открывает PR

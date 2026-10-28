@@ -124,6 +124,8 @@ On every push to `main` the workflow `.github/workflows/docker-publish.yml` buil
 
 The same workflow also runs on a **monthly schedule** (picks up fresh base-image layers and OS patches via `apt-get upgrade` in the `Dockerfile`) and on **pull requests** (build only, no push).
 
+The image is published with **two tags**: `vkosin/npm-ntlm:latest` and `vkosin/npm-ntlm:<NPM version>` (e.g. `:2.16.0`) — pin the version tag in compose if you want controlled upgrades and easy rollback. Note the version tag is mutable: the monthly rebuild refreshes it together with `latest`. And when a push to `main` raises the `NPM_IMAGE` ARG (a merged `version-check` PR or a manual bump), the workflow automatically creates a git tag and **GitHub Release** `v<NPM version>` — no manual release step needed.
+
 Separately, `.github/workflows/version-check.yml` checks monthly for new [NPM releases](https://github.com/NginxProxyManager/nginx-proxy-manager/releases): when one appears, it detects the OpenResty version inside the new image (`nginx -v`), bumps both ARGs in the `Dockerfile` and opens a pull request. GitHub does not run workflows on PRs created by `GITHUB_TOKEN`, so for automatic PR builds add a `PAT_TOKEN` repository secret (classic PAT, scopes `repo` + `workflow`) — otherwise trigger the build manually: close/reopen the PR or push to its branch.
 
 ## Running
